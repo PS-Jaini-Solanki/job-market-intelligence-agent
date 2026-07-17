@@ -1,0 +1,1551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Market Intelligence Agent - Complete Project Documentation</title>
+    <style>
+        @media print {
+            body { font-size: 11pt; }
+            .page-break { page-break-before: always; }
+            .no-break { page-break-inside: avoid; }
+            nav { display: none; }
+            h1, h2, h3 { page-break-after: avoid; }
+            pre, code { page-break-inside: avoid; }
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.7;
+            color: #1a1a2e;
+            background: #f8f9fa;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 20px 40px;
+        }
+        h1 { font-size: 2.2em; color: #0f3460; margin: 30px 0 15px; border-bottom: 3px solid #0f3460; padding-bottom: 10px; }
+        h2 { font-size: 1.7em; color: #16213e; margin: 35px 0 15px; border-bottom: 2px solid #e94560; padding-bottom: 8px; }
+        h3 { font-size: 1.3em; color: #0f3460; margin: 25px 0 10px; }
+        h4 { font-size: 1.1em; color: #e94560; margin: 15px 0 8px; }
+        p { margin: 8px 0; }
+        pre {
+            background: #1a1a2e;
+            color: #e0e0e0;
+            padding: 15px 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 0.88em;
+            line-height: 1.5;
+            margin: 10px 0 15px;
+        }
+        code {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: #e8eaf6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.92em;
+        }
+        pre code { background: none; padding: 0; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px 14px;
+            text-align: left;
+        }
+        th { background: #0f3460; color: white; font-weight: 600; }
+        tr:nth-child(even) { background: #f5f5f5; }
+        .callout {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 12px 18px;
+            margin: 15px 0;
+            border-radius: 0 6px 6px 0;
+        }
+        .callout-warning {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+        }
+        .callout-success {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+        }
+        .callout-danger {
+            background: #fce4ec;
+            border-left: 4px solid #e94560;
+        }
+        .architecture-box {
+            background: white;
+            border: 2px solid #0f3460;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .flow-diagram {
+            background: #1a1a2e;
+            color: #64ffda;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: monospace;
+            white-space: pre;
+            overflow-x: auto;
+            line-height: 1.4;
+            margin: 15px 0;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.82em;
+            font-weight: 600;
+            margin: 2px;
+        }
+        .badge-blue { background: #bbdefb; color: #1565c0; }
+        .badge-green { background: #c8e6c9; color: #2e7d32; }
+        .badge-orange { background: #ffe0b2; color: #e65100; }
+        .badge-purple { background: #e1bee7; color: #6a1b9a; }
+        .badge-red { background: #ffcdd2; color: #c62828; }
+        ul, ol { margin: 8px 0 8px 25px; }
+        li { margin: 4px 0; }
+        .toc { background: white; padding: 25px 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin: 20px 0; }
+        .toc ul { list-style: none; margin: 0; padding: 0; }
+        .toc li { padding: 4px 0; }
+        .toc li a { text-decoration: none; color: #0f3460; }
+        .toc li a:hover { color: #e94560; }
+        .toc ul ul { padding-left: 25px; }
+        .file-path { background: #263238; color: #80cbc4; padding: 4px 10px; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
+        .separator { border: none; border-top: 2px dashed #ccc; margin: 40px 0; }
+        .cover-page {
+            text-align: center;
+            padding: 80px 0 40px;
+        }
+        .cover-page h1 {
+            font-size: 2.8em;
+            border: none;
+            color: #0f3460;
+        }
+        .cover-page p { font-size: 1.15em; color: #555; }
+        .why-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 25px;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+        .why-box strong { color: #ffd700; }
+    </style>
+</head>
+<body>
+
+<!-- ============================================== -->
+<!-- COVER PAGE -->
+<!-- ============================================== -->
+<div class="cover-page">
+    <h1>Job Market Intelligence Agent</h1>
+    <p style="font-size: 1.4em; color: #e94560; font-weight: bold;">Complete Project Documentation</p>
+    <p style="margin-top: 20px;">A Multi-Agent Agentic AI System for Technology Job Market Analysis</p>
+    <p style="margin-top: 40px; color: #888;">Prepared for: New Team Members & Interns</p>
+    <p style="color: #888;">Version: 1.0 | Last Updated: July 2026</p>
+    <hr class="separator">
+</div>
+
+<!-- ============================================== -->
+<!-- TABLE OF CONTENTS -->
+<!-- ============================================== -->
+<div class="toc">
+    <h2 style="margin-top: 0; border: none;">Table of Contents</h2>
+    <ul>
+        <li><strong>1.</strong> <a href="#overview">Project Overview</a></li>
+        <li><strong>2.</strong> <a href="#why">Why This Project Exists</a></li>
+        <li><strong>3.</strong> <a href="#architecture">System Architecture</a></li>
+        <li><strong>4.</strong> <a href="#techstack">Technology Stack & Why Each Tool is Used</a></li>
+        <li><strong>5.</strong> <a href="#directory">Directory Structure Explained</a></li>
+        <li><strong>6.</strong> <a href="#workflow">End-to-End Workflow</a></li>
+        <li><strong>7.</strong> <a href="#agents">Multi-Agent System (LangGraph)</a></li>
+        <li><strong>8.</strong> <a href="#mcp">MCP (Model Context Protocol) Servers</a></li>
+        <li><strong>9.</strong> <a href="#tools">Tools — The Anti-Hallucination Layer</a></li>
+        <li><strong>10.</strong> <a href="#database">Database Layer</a></li>
+        <li><strong>11.</strong> <a href="#api">REST API Layer</a></li>
+        <li><strong>12.</strong> <a href="#ui">Chainlit UI</a></li>
+        <li><strong>13.</strong> <a href="#models">Data Models (Pydantic)</a></li>
+        <li><strong>14.</strong> <a href="#prompts">Prompt Engineering</a></li>
+        <li><strong>15.</strong> <a href="#setup">Setup & Installation Guide</a></li>
+        <li><strong>16.</strong> <a href="#docker">Docker Setup</a></li>
+        <li><strong>17.</strong> <a href="#running">Running the Project</a></li>
+        <li><strong>18.</strong> <a href="#testing">Testing</a></li>
+        <li><strong>19.</strong> <a href="#apikeys">API Keys & External Services</a></li>
+        <li><strong>20.</strong> <a href="#faq">FAQ & Troubleshooting</a></li>
+        <li><strong>21.</strong> <a href="#glossary">Glossary</a></li>
+    </ul>
+</div>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 1. PROJECT OVERVIEW -->
+<!-- ============================================== -->
+<h1 id="overview" class="page-break">1. Project Overview</h1>
+
+<p>The <strong>Job Market Intelligence Agent</strong> is an advanced AI-powered system that analyzes the technology job market. Instead of a simple chatbot, this is a <strong>Multi-Agent System</strong> where multiple specialized AI agents work together to:</p>
+
+<ul>
+    <li>Search real job postings from multiple job boards (Adzuna, Arbeitnow)</li>
+    <li>Extract and rank the most in-demand tech skills</li>
+    <li>Parse salary ranges from job descriptions</li>
+    <li>Analyze GitHub activity for technology trends</li>
+    <li>Compare job markets across different countries</li>
+    <li>Upload your resume and find skill gaps compared to market demands</li>
+    <li>Generate comprehensive, evidence-based market reports</li>
+</ul>
+
+<div class="callout">
+    <strong>Key Principle:</strong> This system guarantees <strong>zero hallucination</strong>. Every statistic in every report comes from real-time job posting data fetched via tools — never from the LLM's memory.
+</div>
+
+<h3>Example Queries the System Handles</h3>
+<table>
+    <tr><th>Query Type</th><th>Example</th></tr>
+    <tr><td>Skill Demand Analysis</td><td>"What are the most in-demand Python skills in Germany?"</td></tr>
+    <tr><td>Country Comparison</td><td>"Compare software engineer salaries in US vs UK"</td></tr>
+    <tr><td>Technology Trends</td><td>"How popular is Rust compared to Go in the job market?"</td></tr>
+    <tr><td>Resume Gap Analysis</td><td>"Analyze my resume against market demands" (with file upload)</td></tr>
+    <tr><td>General Market Query</td><td>"What skills do I need for a Data Scientist role in India?"</td></tr>
+</table>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 2. WHY THIS PROJECT EXISTS -->
+<!-- ============================================== -->
+<h1 id="why" class="page-break">2. Why This Project Exists</h1>
+
+<div class="why-box">
+    <h3 style="color: white;">The Problem</h3>
+    <p>Job seekers and career advisors struggle to get <strong>accurate, real-time data</strong> about the technology job market. Generic AI chatbots give outdated or hallucinated statistics.</p>
+</div>
+
+<div class="why-box" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+    <h3 style="color: white;">The Solution</h3>
+    <p>A multi-agent AI system that fetches <strong>real job postings</strong>, extracts skills/salaries via deterministic tools, and produces <strong>evidence-based reports</strong> with traceable data sources.</p>
+</div>
+
+<h3>Key Design Decisions & Why They Matter</h3>
+
+<table>
+    <tr><th>Decision</th><th>Why</th></tr>
+    <tr><td>Multi-agent architecture</td><td>Complex queries need specialized processing — one agent per concern keeps logic clean and testable</td></tr>
+    <tr><td>Tool-based data gathering</td><td>Prevents LLM hallucination — all data comes from real APIs and regex extraction</td></tr>
+    <tr><td>MCP (Model Context Protocol)</td><td>Standardizes tool interfaces so new tools can be added without changing agent code</td></tr>
+    <tr><td>LangGraph state machine</td><td>Manages agent orchestration with conditional routing, error handling, and state persistence</td></tr>
+    <tr><td>Repository pattern for DB</td><td>Clean separation — agents never write SQL directly, making testing and swapping databases easy</td></tr>
+    <tr><td>Groq (Llama 3.3) as LLM</td><td>Fast inference, free tier available, good performance for structured output tasks</td></tr>
+    <tr><td>Chainlit for UI</td><td>Purpose-built for LLM apps — shows real-time streaming, tool calls, and agent reasoning</td></tr>
+</table>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 3. SYSTEM ARCHITECTURE -->
+<!-- ============================================== -->
+<h1 id="architecture" class="page-break">3. System Architecture</h1>
+
+<h2>3.1 High-Level Architecture Diagram</h2>
+
+<div class="flow-diagram">
++-------------------------------------------------------------------+
+|                        USER INTERFACE                              |
+|                    (Chainlit Web App - port 8001)                  |
+|         Chat interface + Resume file upload + Real-time streaming  |
++-------------------------------------------------------------------+
+            |                                    ^
+            v                                    |
++-------------------------------------------------------------------+
+|                      API LAYER (FastAPI)                           |
+|              POST /api/query   GET /api/query/{id}                 |
+|              POST /api/resume/upload   GET /health                 |
++-------------------------------------------------------------------+
+            |                                    ^
+            v                                    |
++-------------------------------------------------------------------+
+|                  MULTI-AGENT ORCHESTRATION                         |
+|                      (LangGraph StateGraph)                        |
+|                                                                    |
+|  +--------+   +--------+   +--------+   +--------+   +----------+ |
+|  |PLANNER |-->| MARKET |-->| SKILL  |-->| TREND  |-->| RESUME   | |
+|  | AGENT  |   |COLLECT |   |EXTRACT |   |ANALYSIS|   | ANALYSIS | |
+|  +--------+   +--------+   +--------+   +--------+   +----------+ |
+|       |                                                 |          |
+|       v                                                 v          |
+|  +--------+   +---------+                               |          |
+|  |RECOMMD |-->| REPORT  |<------------------------------+          |
+|  |  AGENT |   |GENERATOR|                                            |
+|  +--------+   +---------+                                           |
++-------------------------------------------------------------------+
+            |          |           |            |
+            v          v           v            v
++-------------------------------------------------------------------+
+|                       TOOL LAYER                                   |
+|  +----------+ +----------+ +----------+ +----------+ +---------+ |
+|  |Job Search| | Skill    | | Salary   | | Resume   | | GitHub  | |
+|  | Tool     | |Extractor| | Parser   | | Parser   | | Trend   | |
+|  +----------+ +----------+ +----------+ +----------+ +---------+ |
++-------------------------------------------------------------------+
+            |                                    ^
+            v                                    |
++-------------------------------------------------------------------+
+|                   MCP SERVER LAYER                                 |
+|  +----------+ +----------+ +----------+ +----------+             |
+|  | GitHub   | |Filesystem| | Search   | | Reddit  |              |
+|  | MCP      | | MCP      | | MCP      | | MCP     |              |
+|  +----------+ +----------+ +----------+ +----------+             |
++-------------------------------------------------------------------+
+            |                                    ^
+            v                                    |
++-------------------------------------------------------------------+
+|                   DATA & PERSISTENCE                               |
+|  +------------------+    +-------------------+                     |
+|  | PostgreSQL DB    |    | File System       |                     |
+|  | (SQLAlchemy ORM) |    | (Resume uploads)  |                     |
+|  +------------------+    +-------------------+                     |
++-------------------------------------------------------------------+
+            |                          ^
+            v                          |
++-------------------------------------------------------------------+
+|                  EXTERNAL SERVICES                                 |
+|  +---------+ +----------+ +--------+ +-------+ +-----------+     |
+|  | Adzuna  | |Arbeitnow | | GitHub | |Tavily | | Reddit    |     |
+|  |Job API  | | Job API   | | API    | |Search | | (PRAW)    |     |
+|  +---------+ +----------+ +--------+ +-------+ +-----------+     |
++-------------------------------------------------------------------+
+</div>
+
+<h2>3.2 Request Flow Example</h2>
+
+<p>When a user types <em>"What are the top Python skills in Germany?"</em>:</p>
+
+<ol>
+    <li><strong>Chainlit UI</strong> receives the message, creates initial <code>GraphState</code></li>
+    <li><strong>Planner Agent</strong> extracts role="Python Developer", country="Germany", creates execution plan</li>
+    <li><strong>Market Collection Agent</strong> calls Adzuna API + Arbeitnow API to fetch real job postings</li>
+    <li><strong>Skill Extraction Agent</strong> scans job descriptions, counts skill frequencies, computes statistics</li>
+    <li><strong>Report Generation Agent</strong> compiles everything into a structured markdown report</li>
+    <li><strong>Chainlit UI</strong> streams the report back to the user in real-time</li>
+</ol>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 4. TECHNOLOGY STACK -->
+<!-- ============================================== -->
+<h1 id="techstack" class="page-break">4. Technology Stack & Why Each Tool is Used</h1>
+
+<h2>4.1 Core AI & Agent Framework</h2>
+<table>
+    <tr><th>Technology</th><th>Version</th><th>What It Does</th><th>Why We Use It</th></tr>
+    <tr>
+        <td><strong>LangChain</strong></td><td>0.3.12</td>
+        <td>Framework for building LLM applications with chains, prompts, and tools</td>
+        <td>Provides the base abstraction layer for LLM calls, tool definitions, and prompt management. Without it, we'd write boilerplate for every LLM interaction.</td>
+    </tr>
+    <tr>
+        <td><strong>LangGraph</strong></td><td>0.2.56</td>
+        <td>State machine framework for orchestrating multiple agents</td>
+        <td>Enables conditional routing between agents, state persistence across steps, and error handling. Critical for our multi-agent architecture where different query types trigger different agent paths.</td>
+    </tr>
+    <tr>
+        <td><strong>LangChain-Groq</strong></td><td>0.2.3</td>
+        <td>Groq integration for LangChain</td>
+        <td>Groq provides extremely fast LLM inference using Llama 3.3 70B. Free tier available, fast enough for real-time streaming UI.</td>
+    </tr>
+    <tr>
+        <td><strong>Llama 3.3 70B</strong></td><td>-</td>
+        <td>Open-source LLM running on Groq hardware</td>
+        <td>High quality reasoning for planning and report generation. Free via Groq API. Supports JSON mode for structured output.</td>
+    </tr>
+</table>
+
+<h2>4.2 Backend & API</h2>
+<table>
+    <tr><th>Technology</th><th>What It Does</th><th>Why We Use It</th></tr>
+    <tr>
+        <td><strong>FastAPI</strong></td>
+        <td>Async Python web framework for REST APIs</td>
+        <td>Native async support (critical for our async agents), auto-generated docs at <code>/docs</code>, Pydantic request/response validation, and production-grade performance with uvicorn.</td>
+    </tr>
+    <tr>
+        <td><strong>Uvicorn</strong></td>
+        <td>ASGI server for FastAPI</td>
+        <td>High-performance async server. Runs the FastAPI app on port 8000.</td>
+    </tr>
+    <tr>
+        <td><strong>Pydantic</strong></td>
+        <td>Data validation and settings management</td>
+        <td>All our data models (JobPosting, SkillStatistic, etc.) use Pydantic for automatic validation, serialization, and type safety. Config uses pydantic-settings for env var management.</td>
+    </tr>
+</table>
+
+<h2>4.3 Database</h2>
+<table>
+    <tr><th>Technology</th><th>What It Does</th><th>Why We Use It</th></tr>
+    <tr>
+        <td><strong>PostgreSQL 16</strong></td>
+        <td>Relational database with JSONB support</td>
+        <td>Stores query results, skill statistics, trend snapshots. JSONB columns store complex nested data (job postings, extracted skills) without rigid schemas. Battle-tested for production.</td>
+    </tr>
+    <tr>
+        <td><strong>SQLAlchemy 2.0</strong></td>
+        <td>Python ORM (Object-Relational Mapper)</td>
+        <td>Async support via <code>AsyncSession</code>. Repository pattern built on top. Lets us write Python classes instead of SQL, while still supporting raw queries when needed.</td>
+    </tr>
+    <tr>
+        <td><strong>Alembic</strong></td>
+        <td>Database migration tool for SQLAlchemy</td>
+        <td>Tracks and applies schema changes over time. Essential when multiple developers work on the same DB schema.</td>
+    </tr>
+    <tr>
+        <td><strong>asyncpg</strong></td>
+        <td>Async PostgreSQL driver</td>
+        <td>High-performance async connection to PostgreSQL. Required for SQLAlchemy async mode.</td>
+    </tr>
+</table>
+
+<h2>4.4 Frontend</h2>
+<table>
+    <tr><th>Technology</th><th>What It Does</th><th>Why We Use It</th></tr>
+    <tr>
+        <td><strong>Chainlit</strong></td>
+        <td>Open-source chat UI framework for LLM apps</td>
+        <td>Built specifically for AI applications. Shows real-time streaming of agent reasoning, tool call visualization, file upload support, and step-by-step execution. Far faster to build than a custom React frontend.</td>
+    </tr>
+</table>
+
+<h2>4.5 MCP (Model Context Protocol)</h2>
+<table>
+    <tr><th>Technology</th><th>What It Does</th><th>Why We Use It</th></tr>
+    <tr>
+        <td><strong>MCP SDK</strong></td><td>1.2.0</td>
+        <td>Standardized protocol for AI-tool communication</td>
+        <td>Like USB-C for AI — standardizes how agents discover and call tools. Makes tools reusable across different agents and even different projects.</td>
+    </tr>
+</table>
+
+<h2>4.6 External APIs & Data Sources</h2>
+<table>
+    <tr><th>Service</th><th>Purpose</th><th>Requires API Key?</th></tr>
+    <tr><td><strong>Adzuna API</strong></td><td>Real job postings from thousands of companies globally</td><td>Yes (free tier)</td></tr>
+    <tr><td><strong>Arbeitnow API</strong></td><td>Additional job postings (no key needed)</td><td>No</td></tr>
+    <tr><td><strong>GitHub API</strong></td><td>Repository stats (stars, forks, contributors) for technology trends</td><td>Yes (personal token)</td></tr>
+    <tr><td><strong>Tavily</strong></td><td>Web search API for tech news and market reports</td><td>Yes (free tier)</td></tr>
+    <tr><td><strong>Reddit (PRAW)</strong></td><td>Community sentiment from tech subreddits</td><td>Yes (optional)</td></tr>
+</table>
+
+<h2>4.7 Supporting Libraries</h2>
+<table>
+    <tr><th>Library</th><th>Purpose</th></tr>
+    <tr><td><code>httpx</code> / <code>aiohttp</code></td><td>Async HTTP clients for API calls (Adzuna, GitHub, etc.)</td></tr>
+    <tr><td><code>tavily-python</code></td><td>Official Tavily search API client</td></tr>
+    <tr><td><code>pypdf</code> / <code>python-docx</code></td><td>Parse PDF and Word resume files</td></tr>
+    <tr><td><code>praw</code></td><td>Python Reddit API Wrapper for Reddit integration</td></tr>
+    <tr><td><code>structlog</code></td><td>Structured logging (JSON-formatted logs for production debugging)</td></tr>
+    <tr><td><code>tenacity</code></td><td>Retry logic with exponential backoff for LLM calls</td></tr>
+    <tr><td><code>cachetools</code></td><td>In-memory caching for repeated lookups</td></tr>
+    <tr><td><code>python-dotenv</code></td><td>Loads <code>.env</code> file variables into environment</td></tr>
+    <tr><td><code>rich</code> / <code>typer</code></td><td>Beautiful CLI output and CLI tool creation</td></tr>
+    <tr><td><code>pytest</code> + plugins</td><td>Testing framework with async support and coverage</td></tr>
+</table>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 5. DIRECTORY STRUCTURE -->
+<!-- ============================================== -->
+<h1 id="directory" class="page-break">5. Directory Structure Explained</h1>
+
+<div class="flow-diagram" style="text-align: left;">
+L2_Project/
+|
+|-- agents/                 # Multi-agent system (LangGraph)
+|   |-- state.py            # Shared state definition (GraphState TypedDict)
+|   |-- graph.py            # LangGraph StateGraph — wires agents together
+|   |-- planner.py          # Planner Agent — understands query, creates plan
+|   |-- market_collection.py# Market Collection Agent — fetches job postings
+|   |-- skill_extraction.py # Skill Extraction Agent — counts skills from jobs
+|   |-- trend_analysis.py   # Trend Analysis Agent — GitHub + job market trends
+|   |-- resume_analysis.py  # Resume Analysis Agent — gap analysis
+|   |-- recommendation.py   # Recommendation Agent — actionable advice
+|   +-- report_generation.py# Report Generator — compiles final report
+|
+|-- api/                    # FastAPI REST endpoints
+|   |-- main.py             # App factory, middleware, lifespan events
+|   +-- routes/
+|       |-- query.py        # POST /api/query, GET /api/query/{id}
+|       |-- resume.py       # POST /api/resume/upload, GET skills
+|       +-- health.py       # GET /health, GET /health/ready
+|
+|-- database/               # Database layer (PostgreSQL)
+|   |-- connection.py       # Async engine, session factory, Base class
+|   |-- models.py           # SQLAlchemy ORM models (5 tables)
+|   +-- repositories.py     # Repository pattern classes (CRUD operations)
+|
+|-- models/                 # Pydantic data models (schemas)
+|   |-- __init__.py         # Re-exports all models
+|   |-- job.py              # JobPosting, SalaryRange, JobSearchResult
+|   |-- skill.py            # Skill, SkillStatistic, SkillGap
+|   |-- trend.py            # GitHubStats, TechTrend, TrendSnapshot
+|   |-- resume.py           # Resume, ResumeAnalysis
+|   +-- agent.py            # AgentTask, PlannerOutput, MarketReport
+|
+|-- services/               # Business logic services
+|   |-- llm_service.py      # LLM wrapper (Groq + retry + structured output)
+|   |-- report_service.py   # ReportBuilder — fluent builder for reports
+|   +-- normalization_service.py # Skill name normalization (200+ aliases)
+|
+|-- tools/                  # Deterministic data extraction tools
+|   |-- job_search_tool.py  # Search Adzuna + Arbeitnow APIs
+|   |-- skill_extractor_tool.py # Regex-based skill extraction from text
+|   |-- salary_parser_tool.py   # Regex-based salary parsing
+|   |-- resume_parser_tool.py   # PDF/DOCX/TXT resume parsing
+|   |-- github_trend_tool.py    # GitHub API integration for trends
+|   |-- tech_popularity_tool.py # Popularity scoring algorithm
+|   +-- country_comparison_tool.py # Cross-country market comparison
+|
+|-- prompts/                # LLM prompt templates
+|   |-- planner_prompt.py   # System prompt for the Planner Agent
+|   +-- report_prompt.py    # Prompts for Report Generation + Recommendations
+|
+|-- chainlit_ui/            # Frontend (Chainlit)
+|   |-- app.py              # Entry point — on_chat_start, on_message handlers
+|   |-- callbacks.py        # Graph streaming handler
+|   +-- formatters.py       # Tool call + report formatting for UI
+|
+|-- mcp_servers/            # Model Context Protocol servers
+|   |-- base.py             # MCPServer abstract base class
+|   |-- github_mcp.py       # GitHub API via MCP
+|   |-- filesystem_mcp.py   # File system operations via MCP
+|   |-- search_mcp.py       # Web search via MCP
+|   |-- reddit_mcp.py       # Reddit integration via MCP
+|   +-- registry.py         # MCP server registry + auto-routing
+|
+|-- migrations/             # Alembic database migrations
+|   +-- env.py              # Migration environment configuration
+|
+|-- docker/                 # Docker configuration
+|   |-- Dockerfile.api      # API container image
+|   |-- Dockerfile.chainlit # Chainlit UI container image
+|   +-- postgres/init.sql   # Database initialization SQL
+|
+|-- tests/                  # Test suite
+|   |-- unit/               # Unit tests for individual functions
+|   |-- integration/        # Integration tests (MCP, routing)
+|   +-- e2e/                # End-to-end scenario tests
+|
+|-- docs/                   # Existing documentation
+|   |-- agents_explained.md
+|   |-- mcp_explained.md
+|   +-- tool_calling_explained.md
+|
+|-- config.py               # Centralized settings (pydantic-settings)
+|-- .env.example            # Environment variable template
+|-- requirements.txt        # Python dependencies
+|-- docker-compose.yml      # Docker service definitions
+|-- alembic.ini             # Alembic configuration
++-- README.md               # Project readme
+</div>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 6. END-TO-END WORKFLOW -->
+<!-- ============================================== -->
+<h1 id="workflow" class="page-break">6. End-to-End Workflow</h1>
+
+<h2>6.1 Query Processing Pipeline</h2>
+
+<div class="flow-diagram">
+User types query in Chainlit UI
+         |
+         v
+  [Chainlit on_message handler]
+  - Creates initial GraphState
+  - Starts async graph execution
+         |
+         v
+  [PLANNER AGENT] --- agents/planner.py
+  - Extracts: role, country, query_type
+  - Calls LLM for execution plan
+  - Produces: list of tasks + which agents to run
+  - Routes based on query type:
+      |
+      +--- If query_type == "skill_analysis" --> Market Collection
+      +--- If query_type == "trend_analysis" --> Market Collection + Trend Analysis
+      +--- If query_type == "resume_analysis"--> Market Collection + Resume Analysis
+      +--- If query_type == "comparison"    --> Market Collection (per country)
+      |
+      v
+  [MARKET COLLECTION AGENT] --- agents/market_collection.py
+  - Calls search_jobs() tool
+  - Fetches from Adzuna + Arbeitnow APIs
+  - Returns JobSearchResult with postings
+         |
+         v
+  [SKILL EXTRACTION AGENT] --- agents/skill_extraction.py
+  - Processes raw job postings
+  - Extracts skills via regex patterns
+  - Computes skill frequency statistics
+  - Computes salary statistics
+  - Returns top 50 skills + salary data
+         |
+         v
+  [TREND ANALYSIS AGENT] (conditional) --- agents/trend_analysis.py
+  - Fetches GitHub stats for specified technologies
+  - Combines with job market demand data
+  - Computes popularity scores (0-100)
+  - Returns TrendSnapshot
+         |
+         v
+  [RESUME ANALYSIS AGENT] (conditional) --- agents/resume_analysis.py
+  - Parses uploaded resume (PDF/DOCX/TXT)
+  - Extracts skills from resume text
+  - Compares with top 30 market skills
+  - Computes gap_score (0 = perfect match, 100 = major gaps)
+         |
+         v
+  [RECOMMENDATION AGENT] --- agents/recommendation.py
+  - Takes all analysis results
+  - Calls LLM for prioritized recommendations
+  - Falls back to rule-based recommendations if LLM fails
+         |
+         v
+  [REPORT GENERATION AGENT] --- agents/report_generation.py
+  - Uses ReportBuilder to compile all sections
+  - Generates executive summary via LLM
+  - Produces final MarketReport object
+         |
+         v
+  [Chainlit UI streams report to user]
+  - Shows step-by-step execution
+  - Displays final markdown report
+</div>
+
+<h2>6.2 State Management</h2>
+
+<p>All agents share a single <code>GraphState</code> dictionary that flows through the pipeline. This state contains:</p>
+
+<table>
+    <tr><th>State Field</th><th>Type</th><th>Purpose</th></tr>
+    <tr><td><code>user_query</code></td><td>str</td><td>Original user query</td></tr>
+    <tr><td><code>country_filter</code></td><td>Optional[str]</td><td>Target country extracted by planner</td></tr>
+    <tr><td><code>role</code></td><td>Optional[str]</td><td>Target job role extracted by planner</td></tr>
+    <tr><td><code>resume_path</code></td><td>Optional[str]</td><td>Path to uploaded resume file</td></tr>
+    <tr><td><code>job_search_results</code></td><td>Optional[str]</td><td>Serialized job postings (JSON)</td></tr>
+    <tr><td><code>skill_statistics</code></td><td>Optional[str]</td><td>Serialized skill frequency data</td></tr>
+    <tr><td><code>salary_data</code></td><td>Optional[str]</td><td>Serialized salary statistics</td></tr>
+    <tr><td><code>trend_data</code></td><td>Optional[str]</td><td>Serialized technology trend data</td></tr>
+    <tr><td><code>resume_analysis</code></td><td>Optional[str]</td><td>Serialized resume gap analysis</td></tr>
+    <tr><td><code>recommendations</code></td><td>Optional[str]</td><td>Text recommendations</td></tr>
+    <tr><td><code>final_report</code></td><td>Optional[str]</td><td>Final markdown report</td></tr>
+    <tr><td><code>messages</code></td><td>List</td><td>Execution log for UI display</td></tr>
+    <tr><td><code>errors</code></td><td>List</td><td>Any errors encountered</td></tr>
+</table>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 7. MULTI-AGENT SYSTEM -->
+<!-- ============================================== -->
+<h1 id="agents" class="page-break">7. Multi-Agent System (LangGraph)</h1>
+
+<h2>7.1 What is LangGraph?</h2>
+<p>LangGraph is a library for building <strong>state machines</strong> using LLM agents. Think of it as a flowchart where:</p>
+<ul>
+    <li>Each <strong>node</strong> is an agent (a function that processes state)</li>
+    <li>Each <strong>edge</strong> is a transition (conditional or fixed)</li>
+    <li>The <strong>state</strong> is a shared dictionary that flows between nodes</li>
+</ul>
+
+<h2>7.2 The Seven Agents</h2>
+
+<div class="no-break">
+<h3>1. Planner Agent <span class="badge badge-blue">Orchestrator</span></h3>
+<p><strong>File:</strong> <span class="file-path">agents/planner.py</span></p>
+<p><strong>Job:</strong> Understands the user query and creates an execution plan.</p>
+<ul>
+    <li>Extracts the target role (e.g., "Data Scientist", "Python Developer") using keyword matching</li>
+    <li>Extracts the target country (e.g., "Germany", "US") using keyword matching</li>
+    <li>Calls the LLM to produce a structured JSON execution plan</li>
+    <li>Validates the plan using Pydantic <code>PlannerOutput</code></li>
+    <li>Falls back to a default plan if LLM fails</li>
+</ul>
+<p><strong>Why:</strong> Without a planner, every query would trigger every agent, wasting time and API calls. The planner routes only necessary agents.</p>
+</div>
+
+<div class="no-break">
+<h3>2. Market Collection Agent <span class="badge badge-green">Data Fetcher</span></h3>
+<p><strong>File:</strong> <span class="file-path">agents/market_collection.py</span></p>
+<p><strong>Job:</strong> Fetches real job postings from external APIs.</p>
+<ul>
+    <li>Calls <code>search_jobs()</code> tool which hits Adzuna + Arbeitnow APIs</li>
+    <li>Splits the maximum results between sources (e.g., 50/50)</li>
+    <li>Returns serialized <code>JobSearchResult</code> to state</li>
+</ul>
+<p><strong>Why:</strong> This is where real data enters the system. All subsequent analysis depends on this agent's output.</p>
+</div>
+
+<div class="no-break">
+<h3>3. Skill Extraction Agent <span class="badge badge-purple">Analyzer</span></h3>
+<p><strong>File:</strong> <span class="file-path">agents/skill_extraction.py</span></p>
+<p><strong>Job:</strong> Processes raw job postings to extract structured skill and salary data.</p>
+<ul>
+    <li>Deserializes job results from state</li>
+    <li>Enriches each posting with extracted skills (via regex patterns)</li>
+    <li>Computes skill statistics (frequency counts across all postings)</li>
+    <li>Parses salary ranges from job descriptions</li>
+    <li>Returns top 50 skills and salary data</li>
+</ul>
+<p><strong>Why:</strong> Raw job descriptions are unstructured text. This agent turns them into quantifiable data.</p>
+</div>
+
+<div class="no-break">
+<h3>4. Trend Analysis Agent <span class="badge badge-orange">Trend Tracker</span></h3>
+<p><strong>File:</strong> <span class="file-path">agents/trend_analysis.py</span></p>
+<p><strong>Job:</strong> Measures technology popularity using GitHub activity + job market data.</p>
+<ul>
+    <li>Only runs when specific technologies are mentioned in the query</li>
+    <li>Fetches GitHub stats (stars, forks, contributors) via <code>analyze_github_trends</code> tool</li>
+    <li>Combines GitHub data with job skill counts</li>
+    <li>Computes a popularity score (0-100) using a weighted formula</li>
+</ul>
+<p><strong>Why:</strong> Job demand alone doesn't show the full picture. GitHub activity indicates developer adoption and community health.</p>
+</div>
+
+<div class="no-break">
+<h3>5. Resume Analysis Agent <span class="badge badge-red">Gap Finder</span></h3>
+<p><strong>File:</strong> <span class="file-path">agents/resume_analysis.py</span></p>
+<p><strong>Job:</strong> Compares a user's resume against current market demands.</p>
+<ul>
+    <li>Parses uploaded resume (PDF, DOCX, or TXT)</li>
+    <li>Extracts skills mentioned in the resume</li>
+    <li>Compares against top 30 market skills from Skill Extraction</li>
+    <li>Computes: matching skills, missing skills, bonus skills (in resume but not in market)</li>
+    <li>Calculates a <code>gap_score</code> (0 = perfect match, 100 = major gaps)</li>
+</ul>
+<p><strong>Why:</strong> Helps job seekers understand exactly which skills they need to learn to be competitive.</p>
+</div>
+
+<div class="no-break">
+<h3>6. Recommendation Agent <span class="badge badge-blue">Advisor</span></h3>
+<p><strong>File:</strong> <span class="file-path">agents/recommendation.py</span></p>
+<p><strong>Job:</strong> Generates actionable recommendations based on all analysis results.</p>
+<ul>
+    <li>Builds a summary of all analysis data</li>
+    <li>Calls the LLM with a specialized recommendation prompt</li>
+    <li>Falls back to rule-based recommendations if LLM call fails</li>
+</ul>
+<p><strong>Why:</strong> Raw data needs interpretation. This agent turns statistics into actionable career advice.</p>
+</div>
+
+<div class="no-break">
+<h3>7. Report Generation Agent <span class="badge badge-purple">Compiler</span></h3>
+<p><strong>File:</strong> <span class="file-path">agents/report_generation.py</span></p>
+<p><strong>Job:</strong> Compiles all results into a final, structured market report.</p>
+<ul>
+    <li>Uses <code>ReportBuilder</code> (fluent builder pattern) to add sections</li>
+    <li>Adds skill statistics, salary data, trends, resume analysis, recommendations</li>
+    <li>Generates executive summary via LLM</li>
+    <li>Always includes data limitations disclaimer</li>
+    <li>Produces a <code>MarketReport</code> with <code>to_markdown()</code> method</li>
+</ul>
+<p><strong>Why:</strong> Provides a consistent, well-formatted output regardless of which agents ran.</p>
+</div>
+
+<h2>7.3 Conditional Routing Logic</h2>
+
+<p>Not every agent runs for every query. LangGraph handles this via conditional edges:</p>
+
+<table>
+    <tr><th>Condition</th><th>Function</th><th>Routes To</th></tr>
+    <tr><td>Always (after planner)</td><td>-</td><td>Market Collection</td></tr>
+    <tr><td>After Market Collection</td><td><code>should_analyze_trends()</code></td><td>Trend Analysis (if technologies specified) OR skip</td></tr>
+    <tr><td>After Skill Extraction</td><td><code>should_analyze_resume()</code></td><td>Resume Analysis (if resume uploaded) OR skip</td></tr>
+    <tr><td>Any agent error</td><td><code>should_stop_on_error()</code></td><td>Report Generation (graceful degradation)</td></tr>
+    <tr><td>After all agents</td><td>-</td><td>Report Generation</td></tr>
+</table>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 8. MCP SERVERS -->
+<!-- ============================================== -->
+<h1 id="mcp" class="page-break">8. MCP (Model Context Protocol) Servers</h1>
+
+<h2>8.1 What is MCP?</h2>
+<p>MCP is like <strong>USB-C for AI</strong>. It defines a standard way for AI agents to discover and use tools, regardless of what the tools do internally.</p>
+
+<div class="callout">
+    <strong>Analogy:</strong> Before USB, every device had a different port. Before MCP, every AI tool had a different calling convention. MCP standardizes tool interfaces so agents don't need to know the implementation details.
+</div>
+
+<h2>8.2 Our Four MCP Servers</h2>
+
+<h3>1. GitHub MCP Server <span class="badge badge-blue">github_mcp.py</span></h3>
+<p>Provides 3 tools for GitHub data:</p>
+<ul>
+    <li><code>get_repo_stats</code> — Fetches stars, forks, issues, contributors for a repository</li>
+    <li><code>search_repositories</code> — Searches GitHub repos by topic/keyword</li>
+    <li><code>get_trending</code> — Gets trending repositories</li>
+</ul>
+
+<h3>2. Filesystem MCP Server <span class="badge badge-green">filesystem_mcp.py</span></h3>
+<p>Provides 3 tools for file operations:</p>
+<ul>
+    <li><code>read_file</code> — Reads file contents (with path traversal prevention)</li>
+    <li><code>list_directory</code> — Lists directory contents</li>
+    <li><code>save_report</code> — Saves generated reports to disk</li>
+</ul>
+<p><strong>Security:</strong> Only allows access to <code>ALLOWED_DIRECTORIES</code> — prevents reading system files.</p>
+
+<h3>3. Search MCP Server <span class="badge badge-orange">search_mcp.py</span></h3>
+<p>Provides 3 tools for web search:</p>
+<ul>
+    <li><code>web_search</code> — General web search via Tavily</li>
+    <li><code>search_tech_news</code> — Searches for technology news specifically</li>
+    <li><code>search_market_reports</code> — Searches for market analysis reports</li>
+</ul>
+
+<h3>4. Reddit MCP Server <span class="badge badge-purple">reddit_mcp.py</span> <span class="badge badge-orange">Optional</span></h3>
+<p>Provides 2 tools for Reddit community data:</p>
+<ul>
+    <li><code>search_posts</code> — Searches tech subreddits (r/programming, r/python, r/javascript, etc.)</li>
+    <li><code>get_tech_sentiment</code> — Analyzes community sentiment about technologies</li>
+</ul>
+<p><strong>Note:</strong> Gracefully handles missing Reddit credentials — the system works without it.</p>
+
+<h2>8.3 MCP Registry</h2>
+<p><strong>File:</strong> <span class="file-path">mcp_servers/registry.py</span></p>
+<p>The <code>MCPRegistry</code> is a singleton that:</p>
+<ul>
+    <li>Initializes all 4 MCP servers at startup</li>
+    <li>Provides tool discovery (<code>get_all_tool_names()</code>)</li>
+    <li>Routes tool calls to the correct server (<code>call_tool_auto_route()</code>)</li>
+    <li>Handles errors gracefully</li>
+</ul>
+
+<h2>8.4 MCP Base Class</h2>
+<p><strong>File:</strong> <span class="file-path">mcp_servers/base.py</span></p>
+<p>All MCP servers extend <code>MCPServer</code> abstract base class which provides:</p>
+<ul>
+    <li>Abstract methods: <code>name</code>, <code>get_tools()</code>, <code>call_tool()</code></li>
+    <li><code>safe_call()</code> — wraps every call with error handling, timing, and logging</li>
+    <li><code>has_tool()</code> — checks if server supports a tool</li>
+</ul>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 9. TOOLS -->
+<!-- ============================================== -->
+<h1 id="tools" class="page-break">9. Tools — The Anti-Hallucination Layer</h1>
+
+<div class="callout-danger callout">
+    <strong>The Hallucination Problem:</strong> If you ask an LLM "What percentage of jobs require Python?", it will confidently give you a number — but it's <strong>made up</strong>. The LLM has no access to real job postings. This system solves that by having the LLM call <strong>tools</strong> that fetch real data.
+</div>
+
+<h2>9.1 How Tool Calling Works</h2>
+<ol>
+    <li>LLM receives a prompt and decides it needs data</li>
+    <li>LLM emits a <strong>tool call</strong> (e.g., <code>search_jobs(query="Python", country="Germany")</code>)</li>
+    <li>The system executes the tool — which calls real APIs, runs regex extraction, etc.</li>
+    <li>Tool results are returned to the LLM</li>
+    <li>LLM interprets the results and generates a response based on <strong>real data</strong></li>
+</ol>
+
+<h2>9.2 Our Seven Tools</h2>
+
+<h3>1. Job Search Tool <span class="file-path">tools/job_search_tool.py</span></h3>
+<table>
+    <tr><th>Function</th><th>What It Does</th></tr>
+    <tr><td><code>_search_adzuna()</code></td><td>Calls Adzuna API with paginated search. Maps country names to API paths (e.g., "Germany" -> "de"). Returns job titles, companies, descriptions, salaries.</td></tr>
+    <tr><td><code>_search_arbeitnow()</code></td><td>Calls Arbeitnow API (no key needed). Returns remote-friendly job postings.</td></tr>
+    <tr><td><code>search_jobs()</code></td><td>LangChain <code>@tool</code> that combines both sources. Splits max results between them.</td></tr>
+</table>
+
+<h3>2. Skill Extractor Tool <span class="file-path">tools/skill_extractor_tool.py</span></h3>
+<table>
+    <tr><th>Function</th><th>What It Does</th></tr>
+    <tr><td><code>extract_skills_from_text()</code></td><td>Uses 100+ pre-compiled regex patterns to find skills in job descriptions. Each pattern uses word boundaries to avoid false matches (e.g., "Go" matches "Go language" but not "going").</td></tr>
+    <tr><td><code>compute_skill_statistics()</code></td><td>Counts skill frequencies across all postings, computes percentages.</td></tr>
+    <tr><td><code>_infer_skill_category()</code></td><td>Categorizes skills (Programming, Framework, Database, Cloud, etc.)</td></tr>
+</table>
+
+<h3>3. Salary Parser Tool <span class="file-path">tools/salary_parser_tool.py</span></h3>
+<table>
+    <tr><th>Function</th><th>What It Does</th></tr>
+    <tr><td><code>parse_salary_from_text()</code></td><td>Uses regex patterns for USD ($), GBP (£), EUR (€), INR (₹, LPA) formats. Extracts min/max ranges.</td></tr>
+    <tr><td><code>compute_salary_statistics()</code></td><td>Aggregates midpoint salaries by currency, computes averages and ranges.</td></tr>
+</table>
+
+<h3>4. Resume Parser Tool <span class="file-path">tools/resume_parser_tool.py</span></h3>
+<table>
+    <tr><th>Function</th><th>What It Does</th></tr>
+    <tr><td><code>extract_text_from_file()</code></td><td>Auto-detects file format (PDF/DOCX/TXT) and extracts raw text.</td></tr>
+    <tr><td><code>estimate_experience_years()</code></td><td>Regex patterns for "X+ years of experience", "X years in...", etc.</td></tr>
+</table>
+
+<h3>5. GitHub Trend Tool <span class="file-path">tools/github_trend_tool.py</span></h3>
+<table>
+    <tr><th>Function</th><th>What It Does</th></tr>
+    <tr><td><code>_fetch_repo_stats()</code></td><td>Fetches repo stars, forks, open issues, contributors, latest release date.</td></tr>
+    <tr><td><code>analyze_github_trends()</code></td><td>Looks up 28 pre-mapped technology repositories, fetches stats for each.</td></tr>
+</table>
+
+<h3>6. Tech Popularity Tool <span class="file-path">tools/tech_popularity_tool.py</span></h3>
+<table>
+    <tr><th>Function</th><th>What It Does</th></tr>
+    <tr><td><code>build_tech_trends()</code></td><td>Combines GitHub stats with job demand data into a unified TrendSnapshot.</td></tr>
+    <tr><td><code>rank_technologies()</code></td><td>Ranks technologies by popularity score.</td></tr>
+    <tr><td><code>compare_technologies()</code></td><td>Head-to-head comparison of two technologies.</td></tr>
+</table>
+
+<h3>7. Country Comparison Tool <span class="file-path">tools/country_comparison_tool.py</span></h3>
+<table>
+    <tr><th>Function</th><th>What It Does</th></tr>
+    <tr><td><code>compare_countries()</code></td><td>Analyzes job markets in two countries: skill demand, salary ranges, common vs unique skills. Minimum 10 postings threshold per country.</td></tr>
+</table>
+
+<h2>9.3 The Popularity Score Formula</h2>
+<pre><code>popularity_score = (log_scaled_github_stars × 0.5) + (job_demand_percentage × 0.5)
+
+Where:
+  log_scaled_github_stars = (log(stars + 1) / log(max_stars + 1)) × 50
+  job_demand_percentage   = (tech_job_count / total_job_count) × 50
+  Maximum possible score  = 100</code></pre>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 10. DATABASE LAYER -->
+<!-- ============================================== -->
+<h1 id="database" class="page-break">10. Database Layer</h1>
+
+<h2>10.1 Connection Management</h2>
+<p><strong>File:</strong> <span class="file-path">database/connection.py</span></p>
+<ul>
+    <li>Creates an async SQLAlchemy engine using <code>asyncpg</code> driver</li>
+    <li>Uses singleton pattern — only one engine and session factory for the entire app</li>
+    <li><code>get_db_session()</code> — async context manager for manual session use</li>
+    <li><code>get_session()</code> — FastAPI dependency for route injection</li>
+    <li><code>create_all_tables()</code> — called on app startup</li>
+</ul>
+
+<h2>10.2 ORM Models (5 Tables)</h2>
+<p><strong>File:</strong> <span class="file-path">database/models.py</span></p>
+
+<table>
+    <tr><th>Table</th><th>Model</th><th>Purpose</th><th>Key Columns</th></tr>
+    <tr>
+        <td><code>users</code></td><td>UserModel</td>
+        <td>Stores user information</td>
+        <td>id (UUID), name, email, timestamps</td>
+    </tr>
+    <tr>
+        <td><code>resumes</code></td><td>ResumeModel</td>
+        <td>Stores uploaded resumes</td>
+        <td>id (UUID), user_id (FK), file_name, raw_text, extracted_skills (JSONB), experience_years</td>
+    </tr>
+    <tr>
+        <td><code>market_queries</code></td><td>MarketQueryModel</td>
+        <td>Stores query history and results</td>
+        <td>id (UUID), user_id (FK), query, query_type, result (JSONB), execution_time, status</td>
+    </tr>
+    <tr>
+        <td><code>skill_statistics</code></td><td>SkillStatisticModel</td>
+        <td>Aggregated skill demand data</td>
+        <td>normalized_name, occurrence_count, total_postings_analyzed, source, country. Unique on (normalized_name, source, country)</td>
+    </tr>
+    <tr>
+        <td><code>trend_snapshots</code></td><td>TrendSnapshotModel</td>
+        <td>Technology trend data over time</td>
+        <td>technology, github_stars/forks/contributors, job_count, popularity_score</td>
+    </tr>
+</table>
+
+<h2>10.3 Repository Pattern</h2>
+<p><strong>File:</strong> <span class="file-path">database/repositories.py</span></p>
+
+<p>Each table has a dedicated repository class that handles all database operations:</p>
+
+<table>
+    <tr><th>Repository</th><th>Methods</th></tr>
+    <tr><td>UserRepository</td><td><code>get_by_id()</code>, <code>get_or_create_anonymous()</code></td></tr>
+    <tr><td>QueryRepository</td><td><code>create()</code>, <code>mark_running()</code>, <code>mark_completed()</code>, <code>mark_failed()</code>, <code>get_by_id()</code></td></tr>
+    <tr><td>SkillRepository</td><td><code>upsert_statistics()</code>, <code>get_top_skills()</code></td></tr>
+    <tr><td>TrendRepository</td><td><code>save_trends()</code>, <code>get_latest_for_technology()</code></td></tr>
+    <tr><td>ResumeRepository</td><td><code>save()</code>, <code>get_by_id()</code></td></tr>
+</table>
+
+<div class="callout-success callout">
+    <strong>Why Repository Pattern?</strong> Agents never write SQL directly. This makes it easy to: (1) swap databases, (2) add caching, (3) write unit tests with mock repositories, (4) keep business logic separate from data access.
+</div>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 11. REST API LAYER -->
+<!-- ============================================== -->
+<h1 id="api" class="page-break">11. REST API Layer</h1>
+
+<h2>11.1 App Factory</h2>
+<p><strong>File:</strong> <span class="file-path">api/main.py</span></p>
+<ul>
+    <li><code>create_app()</code> — creates the FastAPI application with all configuration</li>
+    <li>CORS middleware for cross-origin requests</li>
+    <li>Lifespan manager: creates DB tables on startup, closes engine on shutdown</li>
+    <li>Global exception handler for unhandled errors</li>
+</ul>
+
+<h2>11.2 API Endpoints</h2>
+
+<table>
+    <tr><th>Method</th><th>Path</th><th>Purpose</th><th>Request Body</th></tr>
+    <tr>
+        <td><code>POST</code></td><td><code>/api/query</code></td>
+        <td>Submit a job market query</td>
+        <td><code>{"query": "Top Python skills in Germany"}</code></td>
+    </tr>
+    <tr>
+        <td><code>GET</code></td><td><code>/api/query/{query_id}</code></td>
+        <td>Retrieve a previous query result</td>
+        <td>-</td>
+    </tr>
+    <tr>
+        <td><code>POST</code></td><td><code>/api/resume/upload</code></td>
+        <td>Upload a resume file (PDF/DOCX/TXT)</td>
+        <td>Multipart form with file</td>
+    </tr>
+    <tr>
+        <td><code>GET</code></td><td><code>/api/resume/{resume_id}/skills</code></td>
+        <td>Get extracted skills from a resume</td>
+        <td>-</td>
+    </tr>
+    <tr>
+        <td><code>GET</code></td><td><code>/health</code></td>
+        <td>Basic liveness check</td>
+        <td>-</td>
+    </tr>
+    <tr>
+        <td><code>GET</code></td><td><code>/health/ready</code></td>
+        <td>Deep readiness check (DB, LLM, APIs)</td>
+        <td>-</td>
+    </tr>
+    <tr>
+        <td><code>GET</code></td><td><code>/docs</code></td>
+        <td>Auto-generated Swagger UI</td>
+        <td>-</td>
+    </tr>
+</table>
+
+<h2>11.3 Query Processing Flow (API)</h2>
+<ol>
+    <li>Receive query, validate via Pydantic <code>QueryRequest</code></li>
+    <li>Create DB record with status "running"</li>
+    <li>Create initial <code>GraphState</code></li>
+    <li>Execute the full LangGraph pipeline asynchronously</li>
+    <li>Save result to DB, update status to "completed"</li>
+    <li>Return <code>QueryResult</code> with report and metadata</li>
+</ol>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 12. CHAINLIT UI -->
+<!-- ============================================== -->
+<h1 id="ui" class="page-break">12. Chainlit UI</h1>
+
+<h2>12.1 Entry Point</h2>
+<p><strong>File:</strong> <span class="file-path">chainlit_ui/app.py</span></p>
+<ul>
+    <li><code>@cl.on_chat_start</code> — Sends a welcome message explaining capabilities</li>
+    <li><code>@cl.on_message</code> — Handles incoming messages:
+        <ul>
+            <li>Detects file uploads (resumes) → saves to disk, creates state with resume_path</li>
+            <li>Text messages → creates state with user_query</li>
+            <li>Starts async graph execution via <code>handle_graph_stream()</code></li>
+        </ul>
+    </li>
+</ul>
+
+<h2>12.2 Streaming Handler</h2>
+<p><strong>File:</strong> <span class="file-path">chainlit_ui/callbacks.py</span></p>
+<ul>
+    <li><code>handle_graph_stream()</code> — iterates the LangGraph async stream</li>
+    <li>Shows step indicators (planner, market_collection, etc.) as they execute</li>
+    <li>Sends the planner plan as a separate message</li>
+    <li>Displays AI messages during execution</li>
+    <li>Sends the final report as the last message</li>
+</ul>
+
+<h2>12.3 Formatters</h2>
+<p><strong>File:</strong> <span class="file-path">chainlit_ui/formatters.py</span></p>
+<table>
+    <tr><th>Function</th><th>Purpose</th></tr>
+    <tr><td><code>format_tool_call()</code></td><td>Pretty-prints tool calls as formatted JSON</td></tr>
+    <tr><td><code>format_tool_result()</code></td><td>Shows tool results with success/failure indicators, truncates long results</td></tr>
+    <tr><td><code>format_market_report()</code></td><td>Validates dict → MarketReport, renders as markdown</td></tr>
+    <tr><td><code>format_plan()</code></td><td>Formats the execution plan for display</td></tr>
+</table>
+
+<h2>12.4 Running Chainlit</h2>
+<pre><code>chainlit run chainlit_ui/app.py --port 8001</code></pre>
+<p>Opens a chat interface at <code>http://localhost:8001</code>.</p>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 13. DATA MODELS -->
+<!-- ============================================== -->
+<h1 id="models" class="page-break">13. Data Models (Pydantic)</h1>
+
+<p>All data structures use Pydantic for automatic validation, serialization, and type safety.</p>
+
+<h2>13.1 Job Models (<span class="file-path">models/job.py</span>)</h2>
+<table>
+    <tr><th>Model</th><th>Fields</th><th>Purpose</th></tr>
+    <tr><td>SalaryRange</td><td>min, max, currency, period, usd_conversion</td><td>Salary range with auto USD conversion</td></tr>
+    <tr><td>SalaryData</td><td>role, location, sample_count, average_salary, salary_range</td><td>Aggregated salary statistics</td></tr>
+    <tr><td>JobPosting</td><td>title, company, location, description, salary, skills, source, source_url</td><td>Single job posting with all metadata</td></tr>
+    <tr><td>JobSearchResult</td><td>query, postings, sources, total_count</td><td>Collection of job search results with helper methods</td></tr>
+</table>
+
+<h2>13.2 Skill Models (<span class="file-path">models/skill.py</span>)</h2>
+<table>
+    <tr><th>Model</th><th>Key Feature</th></tr>
+    <tr><td>SkillCategory</td><td>Enum with 10 categories (Programming, Framework, Database, Cloud, etc.)</td></tr>
+    <tr><td>Skill</td><td>Hashable (usable in sets/dicts), auto-normalizes names</td></tr>
+    <tr><td>SkillStatistic</td><td>Auto-computes percentage from counts, generates evidence strings</td></tr>
+    <tr><td>SkillGap</td><td>Priority auto-set based on demand % (HIGH > 20%, MEDIUM > 10%, LOW otherwise)</td></tr>
+</table>
+
+<h2>13.3 Trend Models (<span class="file-path">models/trend.py</span>)</h2>
+<table>
+    <tr><th>Model</th><th>Key Feature</th></tr>
+    <tr><td>GitHubStats</td><td>stars, forks, open_issues, contributors, last_release</td></tr>
+    <tr><td>TechTrend</td><td>Computed <code>popularity_score</code> using log-scaled GitHub stars + job demand</td></tr>
+    <tr><td>TrendSnapshot</td><td>Collection of TechTrends with <code>get_ranked()</code> and <code>get_by_technology()</code></td></tr>
+</table>
+
+<h2>13.4 Resume Models (<span class="file-path">models/resume.py</span>)</h2>
+<table>
+    <tr><th>Model</th><th>Key Feature</th></tr>
+    <tr><td>Resume</td><td>Parsed resume with extracted skills list</td></tr>
+    <tr><td>ResumeAnalysis</td><td>matching_skills, missing_skills, bonus_skills, gap_score. <code>get_high_priority_gaps()</code> filters by importance.</td></tr>
+</table>
+
+<h2>13.5 Agent Models (<span class="file-path">models/agent.py</span>)</h2>
+<table>
+    <tr><th>Model</th><th>Key Feature</th></tr>
+    <tr><td>TaskType</td><td>Enum with 8 task types (SKILL_ANALYSIS, MARKET_RESEARCH, etc.)</td></tr>
+    <tr><td>MCPServerType</td><td>Enum for 4 MCP servers (GITHUB, FILESYSTEM, SEARCH, REDDIT)</td></tr>
+    <tr><td>AgentTask</td><td>Single task with dependencies, status, and assigned MCP servers</td></tr>
+    <tr><td>PlannerOutput</td><td>Validated output from Planner Agent (tasks + reasoning + query_type)</td></tr>
+    <tr><td>MarketReport</td><td>Full report with <code>to_markdown()</code> method for rendering</td></tr>
+</table>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 14. PROMPT ENGINEERING -->
+<!-- ============================================== -->
+<h1 id="prompts" class="page-break">14. Prompt Engineering</h1>
+
+<h2>14.1 Planner Prompt (<span class="file-path">prompts/planner_prompt.py</span>)</h2>
+<ul>
+    <li><code>PLANNER_SYSTEM_PROMPT</code> — defines available task types, MCP servers, rules, and expected JSON output format</li>
+    <li><code>build_planner_prompt()</code> — formats the user query with optional resume note into the system prompt</li>
+</ul>
+
+<h2>14.2 Report & Recommendation Prompts (<span class="file-path">prompts/report_prompt.py</span>)</h2>
+<ul>
+    <li><code>REPORT_SYSTEM_PROMPT</code> — rules for writing evidence-based reports:
+        <ul>
+            <li>Every statistic must cite its source</li>
+            <li>Never use "approximately" for data you don't have</li>
+            <li>Always include data limitations section</li>
+        </ul>
+    </li>
+    <li><code>RECOMMENDATION_SYSTEM_PROMPT</code> — rules for generating prioritized recommendations:
+        <ul>
+            <li>Base recommendations on actual skill statistics</li>
+            <li>Prioritize by market demand percentage</li>
+            <li>Include both quick wins and long-term goals</li>
+        </ul>
+    </li>
+</ul>
+
+<div class="callout">
+    <strong>Why separate prompts?</strong> Each agent has a distinct role and needs different instructions. Keeping prompts in dedicated files makes them easy to iterate on without touching agent logic.
+</div>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 15. SETUP & INSTALLATION -->
+<!-- ============================================== -->
+<h1 id="setup" class="page-break">15. Setup & Installation Guide</h1>
+
+<h2>15.1 Prerequisites</h2>
+<table>
+    <tr><th>Requirement</th><th>Version</th><th>How to Check</th><th>How to Install</th></tr>
+    <tr><td>Python</td><td>3.12+</td><td><code>python --version</code></td><td><a href="https://python.org">python.org</a></td></tr>
+    <tr><td>pip</td><td>Latest</td><td><code>pip --version</code></td><td>Comes with Python</td></tr>
+    <tr><td>Docker</td><td>Latest</td><td><code>docker --version</code></td><td><a href="https://docker.com">docker.com</a></td></tr>
+    <tr><td>Docker Compose</td><td>v2+</td><td><code>docker compose version</code></td><td>Comes with Docker Desktop</td></tr>
+    <tr><td>Git</td><td>Latest</td><td><code>git --version</code></td><td><a href="https://git-scm.com">git-scm.com</a></td></tr>
+</table>
+
+<h2>15.2 Step-by-Step Setup</h2>
+
+<h3>Step 1: Clone the Repository</h3>
+<pre><code>git clone &lt;repository-url&gt;
+cd L2_Project</code></pre>
+
+<h3>Step 2: Create Virtual Environment</h3>
+<pre><code>python -m venv venv
+
+# Windows:
+venv\Scripts\activate
+
+# macOS/Linux:
+source venv/bin/activate</code></pre>
+
+<h3>Step 3: Install Dependencies</h3>
+<pre><code>pip install -r requirements.txt</code></pre>
+
+<h3>Step 4: Configure Environment Variables</h3>
+<pre><code># Copy the template
+copy .env.example .env     # Windows
+cp .env.example .env       # macOS/Linux</code></pre>
+
+<p>Edit <code>.env</code> and fill in your API keys:</p>
+<pre><code># Required (get free keys):
+GROQ_API_KEY=gsk_xxxxx          # console.groq.com
+GITHUB_TOKEN=ghp_xxxxx          # github.com/settings/tokens
+TAVILY_API_KEY=tvly_xxxxx      # tavily.com
+
+# Optional:
+ADZUNA_APP_ID=xxxxx             # adzuna.com (for more job data)
+ADZUNA_APP_KEY=xxxxx
+REDDIT_CLIENT_ID=xxxxx          # reddit.com/prefs/apps
+REDDIT_CLIENT_SECRET=xxxxx
+
+# Database (use Docker):
+DATABASE_URL=postgresql+asyncpg://jobmarket:jobmarket123@localhost:5432/jobmarket_intelligence</code></pre>
+
+<h3>Step 5: Start PostgreSQL</h3>
+<pre><code>docker compose up -d postgres</code></pre>
+<p>This starts PostgreSQL 16 with the schema pre-initialized via <code>docker/postgres/init.sql</code>.</p>
+
+<h3>Step 6: Run Database Migrations (Optional)</h3>
+<pre><code>alembic upgrade head</code></pre>
+
+<h2>15.3 Getting API Keys</h2>
+
+<table>
+    <tr><th>Service</th><th>Steps</th><th>Free Tier?</th></tr>
+    <tr>
+        <td><strong>Groq</strong></td>
+        <td>1. Go to console.groq.com<br>2. Sign up<br>3. Create API key</td>
+        <td>Yes (generous)</td>
+    </tr>
+    <tr>
+        <td><strong>GitHub Token</strong></td>
+        <td>1. Go to github.com/settings/tokens<br>2. Generate new token (classic)<br>3. Select "public_repo" scope</td>
+        <td>Yes</td>
+    </tr>
+    <tr>
+        <td><strong>Tavily</strong></td>
+        <td>1. Go to tavily.com<br>2. Sign up<br>3. Copy API key</td>
+        <td>Yes (1000 searches/month)</td>
+    </tr>
+    <tr>
+        <td><strong>Adzuna</strong></td>
+        <td>1. Go to adzuna.com/developer<br>2. Create app<br>3. Get app_id and app_key</td>
+        <td>Yes (250 calls/day)</td>
+    </tr>
+    <tr>
+        <td><strong>Reddit</strong></td>
+        <td>1. Go to reddit.com/prefs/apps<br>2. Create app (script type)<br>3. Get client_id and secret</td>
+        <td>Yes (optional)</td>
+    </tr>
+</table>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 16. DOCKER SETUP -->
+<!-- ============================================== -->
+<h1 id="docker" class="page-break">16. Docker Setup</h1>
+
+<h2>16.1 Docker Compose Services</h2>
+<p><strong>File:</strong> <span class="file-path">docker-compose.yml</span></p>
+
+<table>
+    <tr><th>Service</th><th>Image</th><th>Port</th><th>Purpose</th></tr>
+    <tr><td><code>postgres</code></td><td>postgres:16-alpine</td><td>5432</td><td>PostgreSQL database with pre-initialized schema</td></tr>
+    <tr><td><code>pgadmin</code></td><td>dpage/pgadmin4</td><td>5050</td><td>Web-based database admin UI</td></tr>
+</table>
+
+<h2>16.2 Dockerfiles</h2>
+
+<h3>API Dockerfile (<span class="file-path">docker/Dockerfile.api</span>)</h3>
+<pre><code>FROM python:3.12-slim
+# Installs gcc, libpq-dev, python3-dev (for psycopg2 compilation)
+# Copies requirements.txt, installs dependencies
+# Copies project code
+# Runs: uvicorn api.main:create_app --factory --host 0.0.0.0 --port 8000</code></pre>
+
+<h3>Chainlit Dockerfile (<span class="file-path">docker/Dockerfile.chainlit</span>)</h3>
+<pre><code>FROM python:3.12-slim
+# Same dependencies
+# Runs: chainlit run chainlit_ui/app.py --host 0.0.0.0 --port 8001</code></pre>
+
+<h2>16.3 Database Initialization</h2>
+<p><strong>File:</strong> <span class="file-path">docker/postgres/init.sql</span></p>
+<ul>
+    <li>Creates all 5 tables with proper types (UUID, JSONB, TIMESTAMP)</li>
+    <li>Adds indexes for performance (skill names, technology names)</li>
+    <li>Seeds an anonymous user for anonymous queries</li>
+    <li>Runs automatically when the PostgreSQL container starts for the first time</li>
+</ul>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 17. RUNNING THE PROJECT -->
+<!-- ============================================== -->
+<h1 id="running" class="page-break">17. Running the Project</h1>
+
+<h2>17.1 Development Mode (Recommended)</h2>
+
+<h3>Terminal 1: Start Database</h3>
+<pre><code>docker compose up -d postgres</code></pre>
+
+<h3>Terminal 2: Start API Server</h3>
+<pre><code># Activate virtual environment first
+venv\Scripts\activate     # Windows
+source venv/bin/activate  # macOS/Linux
+
+# Start the API
+uvicorn api.main:create_app --factory --reload --port 8000</code></pre>
+<p>API docs available at: <code>http://localhost:8000/docs</code></p>
+
+<h3>Terminal 3: Start Chainlit UI</h3>
+<pre><code>chainlit run chainlit_ui/app.py --port 8001</code></pre>
+<p>Chat UI available at: <code>http://localhost:8001</code></p>
+
+<h2>17.2 Docker Mode (All Services)</h2>
+<pre><code># Start everything
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Stop everything
+docker compose down</code></pre>
+
+<h2>17.3 Quick Test Query</h2>
+<p>Open <code>http://localhost:8001</code> and type:</p>
+<pre><code>What are the top 10 most demanded skills for Python developers in Germany?</code></pre>
+
+<p>Or via API:</p>
+<pre><code>curl -X POST http://localhost:8000/api/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What are the top 10 most demanded skills for Python developers in Germany?"}'</code></pre>
+
+<h2>17.4 Resume Analysis Test</h2>
+<p>Upload a resume via Chainlit (use the attachment button) and type:</p>
+<pre><code>Analyze my resume against current market demands</code></pre>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 18. TESTING -->
+<!-- ============================================== -->
+<h1 id="testing" class="page-break">18. Testing</h1>
+
+<h2>18.1 Test Structure</h2>
+<table>
+    <tr><th>Level</th><th>Directory</th><th>What It Tests</th></tr>
+    <tr><td>Unit</td><td><code>tests/unit/</code></td><td>Individual functions in isolation (no external dependencies)</td></tr>
+    <tr><td>Integration</td><td><code>tests/integration/</code></td><td>Components working together (MCP registry, routing logic)</td></tr>
+    <tr><td>E2E</td><td><code>tests/e2e/</code></td><td>Full scenario tests (state creation, query processing)</td></tr>
+</table>
+
+<h2>18.2 Running Tests</h2>
+<pre><code># Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=. --cov-report=html
+
+# Run specific test file
+pytest tests/unit/test_normalization.py -v
+
+# Run specific test level
+pytest tests/unit/ -v
+pytest tests/integration/ -v</code></pre>
+
+<h2>18.3 Test Descriptions</h2>
+<table>
+    <tr><th>Test File</th><th>What It Tests</th></tr>
+    <tr><td><code>test_normalization.py</code></td><td>Skill name normalization: "JS" -> "JavaScript", "K8s" -> "Kubernetes", case insensitivity, unknown pass-through</td></tr>
+    <tr><td><code>test_skill_extractor.py</code></td><td>Regex skill extraction: keyword matching, word boundaries ("going" doesn't match "Go"), case insensitivity</td></tr>
+    <tr><td><code>test_salary_parser.py</code></td><td>Salary parsing: USD ($50,000-$80,000), INR (15-25 LPA), statistics computation with mixed data</td></tr>
+    <tr><td><code>test_resume_parser.py</code></td><td>Experience estimation: "5+ years of experience", "3 years in machine learning", etc.</td></tr>
+    <tr><td><code>test_planner_routing.py</code></td><td>Query parsing: role extraction ("Python developer"), country extraction ("in Germany")</td></tr>
+    <tr><td><code>test_mcp_communication.py</code></td><td>MCP server initialization, tool discovery, tool calling</td></tr>
+</table>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 19. API KEYS -->
+<!-- ============================================== -->
+<h1 id="apikeys" class="page-break">19. API Keys & External Services</h1>
+
+<h2>19.1 Config Management</h2>
+<p><strong>File:</strong> <span class="file-path">config.py</span></p>
+<ul>
+    <li>Uses <code>pydantic-settings</code> for type-safe environment variable management</li>
+    <li>All settings are loaded from <code>.env</code> file</li>
+    <li>Computed properties: <code>has_groq</code>, <code>has_github</code>, <code>has_tavily</code>, etc.</li>
+    <li>Cached via <code>@lru_cache</code> so <code>.env</code> is only read once</li>
+</ul>
+
+<h2>19.2 Settings Overview</h2>
+<table>
+    <tr><th>Setting</th><th>Required?</th><th>Default</th><th>Purpose</th></tr>
+    <tr><td><code>GROQ_API_KEY</code></td><td>Yes</td><td>-</td><td>LLM inference (Llama 3.3 70B)</td></tr>
+    <tr><td><code>GROQ_MODEL</code></td><td>No</td><td>llama-3.3-70b-versatile</td><td>Which model to use on Groq</td></tr>
+    <tr><td><code>GITHUB_TOKEN</code></td><td>Yes</td><td>-</td><td>GitHub API for repository stats</td></tr>
+    <tr><td><code>TAVILY_API_KEY</code></td><td>Yes</td><td>-</td><td>Web search API</td></tr>
+    <tr><td><code>ADZUNA_APP_ID</code></td><td>No</td><td>-</td><td>Job search API (more results)</td></tr>
+    <tr><td><code>ADZUNA_APP_KEY</code></td><td>No</td><td>-</td><td>Job search API</td></tr>
+    <tr><td><code>REDDIT_CLIENT_ID</code></td><td>No</td><td>-</td><td>Reddit integration (optional)</td></tr>
+    <tr><td><code>DATABASE_URL</code></td><td>Yes</td><td>-</td><td>PostgreSQL connection string</td></tr>
+    <tr><td><code>APP_ENV</code></td><td>No</td><td>development</td><td>Environment mode</td></tr>
+    <tr><td><code>LOG_LEVEL</code></td><td>No</td><td>INFO</td><td>Logging verbosity</td></tr>
+    <tr><td><code>MAX_UPLOAD_SIZE_MB</code></td><td>No</td><td>10</td><td>Max resume file size</td></tr>
+</table>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 20. FAQ & TROUBLESHOOTING -->
+<!-- ============================================== -->
+<h1 id="faq" class="page-break">20. FAQ & Troubleshooting</h1>
+
+<h2>Common Issues</h2>
+
+<div class="no-break">
+<h3>Q: "ModuleNotFoundError: No module named 'api'"</h3>
+<p><strong>Cause:</strong> You're running from the wrong directory.</p>
+<p><strong>Fix:</strong> Always run from the project root (<code>L2_Project/</code>). The <code>api</code>, <code>agents</code>, etc. are top-level packages.</p>
+</div>
+
+<div class="no-break">
+<h3>Q: " connection refused" on PostgreSQL</h3>
+<p><strong>Cause:</strong> Docker container not running.</p>
+<p><strong>Fix:</strong> <code>docker compose up -d postgres</code> and wait ~5 seconds for it to initialize.</p>
+</div>
+
+<div class="no-break">
+<h3>Q: "GROQ_API_KEY not set" warning</h3>
+<p><strong>Cause:</strong> <code>.env</code> file missing or not in project root.</p>
+<p><strong>Fix:</strong> Copy <code>.env.example</code> to <code>.env</code> and fill in your keys.</p>
+</div>
+
+<div class="no-break">
+<h3>Q: Chainlit shows "Error connecting to LLM"</h3>
+<p><strong>Cause:</strong> Invalid Groq API key.</p>
+<p><strong>Fix:</strong> Verify your key at <code>console.groq.com</code>. Ensure no extra spaces in <code>.env</code>.</p>
+</div>
+
+<div class="no-break">
+<h3>Q: "alembic" command not found</h3>
+<p><strong>Cause:</strong> Alembic not installed or venv not activated.</p>
+<p><strong>Fix:</strong> <code>pip install alembic</code> and activate your virtual environment.</p>
+</div>
+
+<div class="no-break">
+<h3>Q: Skills not found in job postings</h3>
+<p><strong>Cause:</strong> Too few job postings returned (need minimum data for statistics).</p>
+<p><strong>Fix:</strong> Try broader queries (e.g., "Python developer" instead of "Senior ML Engineer specializing in PyTorch at startup").</p>
+</div>
+
+<div class="no-break">
+<h3>Q: How do I add a new skill to detect?</h3>
+<p><strong>File:</strong> <span class="file-path">tools/skill_extractor_tool.py</span></p>
+<p>Add a new regex pattern to the <code>SKILL_PATTERNS</code> dictionary and add an alias to <span class="file-path">services/normalization_service.py</span> <code>SKILL_ALIASES</code>.</p>
+</div>
+
+<div class="no-break">
+<h3>Q: How do I add a new MCP server?</h3>
+<ol>
+    <li>Create <span class="file-path">mcp_servers/your_server.py</span> extending <code>MCPServer</code></li>
+    <li>Implement <code>name</code>, <code>get_tools()</code>, <code>call_tool()</code></li>
+    <li>Register it in <span class="file-path">mcp_servers/registry.py</span></li>
+</ol>
+</div>
+
+<hr class="separator">
+
+<!-- ============================================== -->
+<!-- 21. GLOSSARY -->
+<!-- ============================================== -->
+<h1 id="glossary" class="page-break">21. Glossary</h1>
+
+<table>
+    <tr><th>Term</th><th>Definition</th></tr>
+    <tr><td><strong>Agentic AI</strong></td><td>AI systems that can plan, use tools, and take actions autonomously — not just answer questions.</td></tr>
+    <tr><td><strong>LangChain</strong></td><td>Python framework for building LLM-powered applications with chains, prompts, and tool integrations.</td></tr>
+    <tr><td><strong>LangGraph</strong></td><td>Extension of LangChain for building stateful, multi-agent systems with conditional routing.</td></tr>
+    <tr><td><strong>StateGraph</strong></td><td>LangGraph's core abstraction — a directed graph where nodes are agents and edges are transitions.</td></tr>
+    <tr><td><strong>GraphState</strong></td><td>The shared dictionary that flows between all agents in the LangGraph pipeline.</td></tr>
+    <tr><td><strong>MCP</strong></td><td>Model Context Protocol — a standard way for AI agents to discover and use external tools.</td></tr>
+    <tr><td><strong>Tool Calling</strong></td><td>When an LLM decides to invoke an external function (tool) to get data, rather than generating from memory.</td></tr>
+    <tr><td><strong>Hallucination</strong></td><td>When an LLM generates confident-sounding but false information. Our tool-calling approach prevents this.</td></tr>
+    <tr><td><strong>Zero Hallucination</strong></td><td>Our guarantee that all statistics come from real API data, not from LLM memory.</td></tr>
+    <tr><td><strong>Pydantic</strong></td><td>Python library for data validation using type annotations. Ensures data is correct at runtime.</td></tr>
+    <tr><td><strong>JSONB</strong></td><td>PostgreSQL column type that stores JSON data with indexing and query support.</td></tr>
+    <tr><td><strong>Repository Pattern</strong></td><td>Design pattern that separates data access logic from business logic via dedicated classes.</td></tr>
+    <tr><td><strong>Fluent Builder</strong></td><td>Design pattern where methods return <code>self</code>, allowing chained calls: <code>builder.add_a().add_b().build()</code></td></tr>
+    <tr><td><strong>Singleton</strong></td><td>Design pattern ensuring only one instance of a class exists (used for engine, session factory, MCP registry).</td></tr>
+    <tr><td><strong>Async/Await</strong></td><td>Python concurrency model for non-blocking I/O. Critical for performance when calling multiple APIs.</td></tr>
+    <tr><td><strong>ASGI</strong></td><td>Asynchronous Server Gateway Interface — the standard for async Python web servers (Uvicorn implements this).</td></tr>
+    <tr><td><strong>ORM</strong></td><td>Object-Relational Mapper — maps Python classes to database tables (SQLAlchemy).</td></tr>
+    <tr><td><strong>Alembic</strong></td><td>Database migration tool that tracks and applies schema changes over time.</td></tr>
+    <tr><td><strong>Chainlit</strong></td><td>Open-source Python framework for building chat UIs for LLM applications.</td></tr>
+    <tr><td><strong>Groq</strong></td><td>AI inference company providing extremely fast LLM hosting. We use their free tier for Llama 3.3 70B.</td></tr>
+    <tr><td><strong>Llama 3.3 70B</strong></td><td>Meta's open-source 70-billion parameter language model, hosted on Groq for fast inference.</td></tr>
+    <tr><td><strong>Popularity Score</strong></td><td>Our custom 0-100 metric combining GitHub activity (50%) and job market demand (50%).</td></tr>
+    <tr><td><strong>Gap Score</strong></td><td>0-100 metric measuring how well a resume matches market demands (0 = perfect match).</td></tr>
+    <tr><td><strong>Evidence String</strong></td><td>A human-readable string like "Python: 45 of 100 postings (45%)" — used in reports for traceability.</td></tr>
+</table>
+
+<hr class="separator">
+
+<div style="text-align: center; padding: 40px 0; color: #888;">
+    <p><strong>End of Documentation</strong></p>
+    <p>Job Market Intelligence Agent v1.0 | July 2026</p>
+    <p style="font-size: 0.85em; margin-top: 10px;">Generated for onboarding new team members and interns.</p>
+    <p style="font-size: 0.85em;">To save as PDF: Open this file in Chrome → Ctrl+P → Save as PDF</p>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,61 @@
+version: "3.9"
+
+# ============================================================
+# Job Market Intelligence Agent — Docker Compose
+# ============================================================
+# This file defines all infrastructure services.
+# Run with: docker compose up -d
+# ============================================================
+
+services:
+
+  # ----------------------------------------------------------
+  # PostgreSQL — Primary database for all persistent storage
+  # ----------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: job_market_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-job_market_db}
+      POSTGRES_USER: ${POSTGRES_USER:-job_market_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "5432:5432"
+    volumes:
+      # Named volume ensures data survives container restarts
+      - postgres_data:/var/lib/postgresql/data
+      # Initial SQL schema is loaded on first startup
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-job_market_user} -d ${POSTGRES_DB:-job_market_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------
+  # pgAdmin — Web-based PostgreSQL GUI (optional, for debugging)
+  # ----------------------------------------------------------
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: job_market_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@jobmarket.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+# ----------------------------------------------------------
+# Named volumes — data persists across container restarts
+# ----------------------------------------------------------
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
