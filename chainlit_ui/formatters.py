@@ -62,3 +62,27 @@ def format_plan(plan_dict: dict) -> str:
             md += f"   - Required MCP: `{', '.join(mcp)}`\n"
 
     return md
+
+
+def format_mcp_call(call_dict: dict) -> str:
+    """Format a recorded MCP call into a compact Markdown line."""
+    try:
+        from models.agent import MCPCallRecord
+        record = MCPCallRecord.model_validate(call_dict)
+        return record.to_markdown()
+    except Exception:
+        status = "✅" if call_dict.get("success", True) else "❌"
+        args = ", ".join(
+            f"{k}={v}" for k, v in list(call_dict.get("arguments", {}).items())[:3]
+        )
+        return (
+            f"{status} **{call_dict.get('agent', '?')}** → "
+            f"`{call_dict.get('server', '?')}` MCP · "
+            f"`{call_dict.get('tool', '?')}({args})`"
+        )
+
+
+def format_intent(intent: str, confidence: float) -> str:
+    """Format the classifier's intent decision for display."""
+    conf = f" ({confidence:.0%} confidence)" if confidence else ""
+    return f"🧭 **Intent detected:** `{intent}`{conf}"

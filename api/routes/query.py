@@ -150,6 +150,12 @@ async def submit_query(
         if not report:
             raise ValueError("Agent pipeline did not produce a report")
 
+        # Include the concise, question-aligned answer alongside the report
+        # so API consumers get a direct response too.
+        result = dict(report)
+        if final_state.get("direct_answer"):
+            result["direct_answer"] = final_state["direct_answer"]
+
         # Save to database
         await query_repo.mark_completed(
             query_id=query_id,

@@ -1,14 +1,27 @@
-# Welcome to Chainlit! 🚀🤖
+# 👋 Job Market Intelligence Agent
 
-Hi there, Developer! 👋 We're excited to have you on board. Chainlit is a powerful tool designed to help you prototype, debug and share applications built on top of LLMs.
+A **multi-agent AI system** that analyzes the tech job market in real time using **LangGraph** + **MCP** (Model Context Protocol).
 
-## Useful Links 🔗
+## What I can do
 
-- **Documentation:** Get started with our comprehensive [Chainlit Documentation](https://docs.chainlit.io) 📚
-- **Discord Community:** Join our friendly [Chainlit Discord](https://discord.gg/k73SQ3FyUh) to ask questions, share your projects, and connect with other developers! 💬
+| Capability | Example |
+|---|---|
+| 🔍 **Job market analysis** | "What skills are required for AI Engineers in India?" |
+| 📈 **Technology trends** | "Should I learn LangGraph or CrewAI?" |
+| 🌍 **Country comparison** | "Compare AI job markets in India vs USA" |
+| 💰 **Salary insights** | "What's the average salary of a Data Scientist in the UK?" |
+| 📄 **Resume analysis** | Upload your resume → get a market fit score |
 
-We can't wait to see what you create with Chainlit! Happy coding! 💻😊
+## How it works
 
-## Welcome screen
+Every question passes through a **Query Classifier** that decides between:
 
-To modify the welcome screen, edit the `chainlit.md` file at the root of your project. If you do not want a welcome screen, just leave this file empty.
+1. **Analytical questions** → routed through the multi-agent pipeline:
+   `Planner → Market Collection (jobs MCP) → Skill Extraction → Trend Analysis (github MCP) → Resume Analysis (filesystem MCP) → Recommendation → Final Answer → Report (filesystem MCP)`
+2. **Conversational questions** → answered directly by the **ChatResponder** (optionally grounded with the `search` MCP)
+
+## Try it
+
+- Ask "hi" — a quick greeting, no heavy pipeline
+- Ask "what can you do?" — capability overview
+- Ask a job-market question — watch the full agent + MCP pipeline run live

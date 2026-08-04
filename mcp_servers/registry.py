@@ -29,6 +29,7 @@ from mcp_servers.github_mcp import GitHubMCPServer
 from mcp_servers.filesystem_mcp import FilesystemMCPServer
 from mcp_servers.search_mcp import SearchMCPServer
 from mcp_servers.reddit_mcp import RedditMCPServer
+from mcp_servers.jobs_mcp import JobsMCPServer
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ class MCPRegistry:
             "filesystem": FilesystemMCPServer(),
             "search": SearchMCPServer(),
             "reddit": RedditMCPServer(),
+            "jobs": JobsMCPServer(),
         }
         logger.info(
             "MCP Registry initialized",

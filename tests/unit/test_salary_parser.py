@@ -20,9 +20,9 @@ def test_parse_salary_from_text_inr_lpa():
 
 def test_compute_salary_statistics():
     postings = [
-        JobPosting(title="A", company="C", location="L", source="adzuna", salary=SalaryRange(min_value=100, max_value=200, currency="USD")),
-        JobPosting(title="B", company="C", location="L", source="adzuna", salary=SalaryRange(min_value=150, max_value=250, currency="USD")),
-        JobPosting(title="C", company="C", location="L", source="adzuna", salary=None, description="$120k"),
+        JobPosting(title="A", company="C", location="L", country="US", source="adzuna", salary=SalaryRange(min_value=100, max_value=200, currency="USD")),
+        JobPosting(title="B", company="C", location="L", country="US", source="adzuna", salary=SalaryRange(min_value=150, max_value=250, currency="USD")),
+        JobPosting(title="C", company="C", location="L", country="US", source="adzuna", salary=None, description="$120k"),
     ]
     
     stats = compute_salary_statistics(postings, role="Test", country="US")

@@ -42,14 +42,25 @@ async def run_recommendation(state: GraphState) -> dict:
     # Gather available evidence
     skill_stats = state.get("skill_statistics") or []
     resume_analysis = state.get("resume_analysis")
+    resume_data = state.get("resume_data")
     trend_data = state.get("trend_data")
-    role = state.get("role", "AI Engineer")
+    role = state.get("role", "Software Engineer")
     country = state.get("country_filter", "global")
+
+    # Skills the user already has — the LLM must never recommend these.
+    user_skills: list[str] = []
+    if resume_data:
+        user_skills = [
+            s["normalized_name"]
+            for s in resume_data.get("extracted_skills", [])
+            if isinstance(s, dict) and s.get("normalized_name")
+        ]
 
     # Build analysis data summary for the LLM
     analysis_summary: dict = {
         "role": role,
         "market": country,
+        "user_skills": user_skills,
         "top_demanded_skills": [
             f"{s['skill_name']}: {s['occurrence_count']}/{s['total_postings']} postings ({s['percentage']}%)"
             for s in skill_stats[:15]
@@ -88,8 +99,10 @@ async def run_recommendation(state: GraphState) -> dict:
             system_prompt=RECOMMENDATION_SYSTEM_PROMPT,
         )
 
-        # Parse the LLM response into a list
+        # Parse the LLM response into a list, filtering out any skill the
+        # user already has (the model sometimes recommends from demand alone).
         recommendations = _parse_recommendations(raw_recommendations)
+        recommendations = _filter_known_skills(recommendations, user_skills)
 
     except Exception as e:
         logger.error("Recommendation LLM failed — using rule-based fallback", extra={"error": str(e)})
@@ -115,24 +128,63 @@ def _parse_recommendations(raw_text: str) -> list[str]:
     """
     Parse the LLM recommendation response into a list of strings.
 
+    Skips LLM preamble/instruction lines like
+    "Based on the provided market data, here are 3-6 prioritized...".
+
     Args:
         raw_text: Raw LLM response text.
 
     Returns:
         List of recommendation strings.
     """
+    import re
+
+    # Lines that look like instructions/preamble rather than concrete advice.
+    preamble_re = re.compile(
+        r"based on|here are|prioritized|the following|below are|"
+        r"recommendations?( for| below|:)|use only this data|"
+        r"only recommend technologies",
+        re.IGNORECASE,
+    )
+
     lines = raw_text.strip().split("\n")
     recommendations = []
 
     for line in lines:
         line = line.strip()
         # Remove numbered list prefixes like "1.", "2.", "•", "-"
-        import re
         clean = re.sub(r"^[\d]+\.\s*|^[-•*]\s*", "", line)
-        if clean and len(clean) > 10:  # Skip very short lines
+        if clean and len(clean) > 10 and not preamble_re.search(clean):
             recommendations.append(clean)
 
     return recommendations[:6]  # Max 6 recommendations
+
+
+def _filter_known_skills(recommendations: list[str], user_skills: list[str]) -> list[str]:
+    """
+    Drop recommendations that reference a skill the user already has.
+
+    Args:
+        recommendations: Parsed recommendation strings.
+        user_skills: Normalized skill names present on the resume.
+
+    Returns:
+        Filtered recommendation list (order preserved).
+    """
+    if not user_skills:
+        return recommendations
+
+    known = {s.lower() for s in user_skills}
+    filtered = []
+    for rec in recommendations:
+        # The recommendation line usually starts "Learn <Skill>" or contains
+        # the skill name. Strip common prefixes before matching.
+        import re
+        candidate = re.sub(r"^(learn|master|strengthen|focus on)\s+", "", rec, flags=re.IGNORECASE)
+        first_word = candidate.split()[0].strip("*`\"'().,;:") if candidate.split() else ""
+        if first_word.lower() not in known and candidate.lower().split(" ")[0] not in known:
+            filtered.append(rec)
+    return filtered or recommendations
 
 
 def _rule_based_recommendations(

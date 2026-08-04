@@ -20,6 +20,7 @@ from uuid import uuid4
 from langchain_core.messages import AIMessage
 
 from agents.state import GraphState
+from models.agent import MCPCallRecord
 from models.resume import Resume, ResumeAnalysis
 from models.skill import Skill, SkillGap, SkillStatistic
 from tools.resume_parser_tool import extract_text_from_file, estimate_experience_years
@@ -52,8 +53,40 @@ async def run_resume_analysis(state: GraphState) -> dict:
 
     logger.info("Resume analysis starting", extra={"path": resume_path})
 
-    # Step 1: Parse the resume
-    raw_text = extract_text_from_file(resume_path)
+    # Step 1: Read the resume through the filesystem MCP (visible in UI),
+    # then parse the content with the resume_parser_tool.
+    mcp_calls = state.get("mcp_calls", []) or []
+    from mcp_servers.registry import get_registry
+    registry = get_registry()
+    read_result = await registry.call_tool(
+        "filesystem", "read_file", {"file_path": resume_path}
+    )
+    mcp_calls = [
+        *mcp_calls,
+        MCPCallRecord(
+            agent="resume_analysis",
+            server="filesystem",
+            tool="read_file",
+            arguments={"file_path": resume_path},
+            success=read_result.success,
+            summary=(
+                "Located resume file for parsing"
+                if read_result.success else (read_result.error or "read failed")
+            ),
+        ).model_dump(),
+    ]
+
+    raw_text = ""
+    try:
+        if read_result.success and read_result.result and "content" in read_result.result:
+            raw_text = read_result.result["content"]
+        else:
+            # Binary files (PDF/DOCX) need the parser — read them directly.
+            raw_text = extract_text_from_file(resume_path)
+    except Exception as e:
+        logger.error("Resume text extraction failed", extra={"error": str(e)})
+        raw_text = ""
+
     skill_names = extract_skills_from_text(raw_text)
     experience_years = estimate_experience_years(raw_text)
 
@@ -80,6 +113,7 @@ async def run_resume_analysis(state: GraphState) -> dict:
         logger.warning("No skill statistics available for resume gap analysis")
         return {
             "resume_data": resume.model_dump(),
+            "mcp_calls": mcp_calls,
             "errors": state.get("errors", []) + [
                 "Resume parsed but gap analysis skipped — no market data available"
             ],
@@ -138,7 +172,7 @@ async def run_resume_analysis(state: GraphState) -> dict:
         else 0.0
     )
 
-    query_context = f"{state.get('role', 'AI Engineer')} in {state.get('country_filter', 'global market')}"
+    query_context = f"{state.get('role', 'Software Engineer')} in {state.get('country_filter') or 'global market'}"
 
     analysis = ResumeAnalysis(
         resume_id=resume.id,
@@ -163,6 +197,7 @@ async def run_resume_analysis(state: GraphState) -> dict:
     return {
         "resume_data": resume.model_dump(),
         "resume_analysis": analysis.model_dump(),
+        "mcp_calls": mcp_calls,
         "completed_agents": state.get("completed_agents", []) + ["resume_analysis"],
         "messages": [
             AIMessage(

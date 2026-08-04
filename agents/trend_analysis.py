@@ -4,10 +4,13 @@ agents/trend_analysis.py
 Trend Analysis Agent — combines GitHub data with job market data.
 
 RESPONSIBILITY:
-- Fetch GitHub statistics for technologies being analyzed
+- Fetch GitHub statistics via the `github` MCP server (registry)
 - Combine with job market skill demand data
 - Compute popularity scores and rankings
 - Store trend snapshot in state
+
+Every GitHub call goes through the MCP registry so the UI can show
+exactly which github tool was called for which technology.
 
 This agent is only run when the query involves technology trend analysis
 (e.g., "What's trending?", "Should I learn MCP or LangGraph?").
@@ -20,11 +23,31 @@ import logging
 from langchain_core.messages import AIMessage
 
 from agents.state import GraphState
-from tools.github_trend_tool import analyze_github_trends
+from models.agent import MCPCallRecord
+from models.trend import GitHubStats
+from tools.github_trend_tool import TECH_TO_REPO
 from tools.tech_popularity_tool import build_tech_trends
-from models.trend import TrendSnapshot
 
 logger = logging.getLogger(__name__)
+
+
+def _coerce_github_stats(raw: dict) -> GitHubStats | None:
+    """
+    Convert a github MCP `get_repo_stats` result into a GitHubStats model.
+
+    Args:
+        raw: Result dict from the github MCP server.
+
+    Returns:
+        GitHubStats instance, or None if the data isn't usable.
+    """
+    if not raw or "stars" not in raw or isinstance(raw.get("error"), str):
+        return None
+    try:
+        return GitHubStats(**raw)
+    except Exception as e:
+        logger.debug("Could not coerce GitHub stats", extra={"error": str(e)})
+        return None
 
 
 async def run_trend_analysis(state: GraphState) -> dict:
@@ -51,9 +74,65 @@ async def run_trend_analysis(state: GraphState) -> dict:
         extra={"technologies": technologies},
     )
 
-    # Step 1: Fetch GitHub data for all technologies
-    # analyze_github_trends is a LangChain tool — we call it directly
-    github_raw = await analyze_github_trends.ainvoke({"technologies": technologies})
+    from mcp_servers.registry import get_registry
+    registry = get_registry()
+    mcp_calls = state.get("mcp_calls", []) or []
+    github_data: dict[str, dict] = {}
+
+    for tech in technologies:
+        repo_path = TECH_TO_REPO.get(tech)
+
+        if repo_path:
+            # Canonical repo → get_repo_stats (detailed GitHub data).
+            result = await registry.call_tool(
+                "github", "get_repo_stats", {"repo_path": repo_path}
+            )
+            record = MCPCallRecord(
+                agent="trend_analysis",
+                server="github",
+                tool="get_repo_stats",
+                arguments={"repo_path": repo_path},
+                success=result.success,
+                summary=(
+                    f"{tech}: {result.result.get('stars', 'n/a')}★"
+                    if result.success and result.result
+                    else (result.error or "failed")
+                ),
+            )
+            mcp_calls = [*mcp_calls, record.model_dump()]
+
+            if result.success and result.result and "error" not in result.result:
+                github_data[tech] = result.result
+                github_data[tech]["source"] = "github_api"
+            else:
+                github_data[tech] = {"error": "Could not fetch data"}
+        else:
+            # No canonical repo → get_trending topic search.
+            result = await registry.call_tool(
+                "github", "get_trending", {"topic": tech.lower().replace(" ", "-")}
+            )
+            record = MCPCallRecord(
+                agent="trend_analysis",
+                server="github",
+                tool="get_trending",
+                arguments={"topic": tech},
+                success=result.success,
+                summary=(
+                    f"{tech}: {result.result.get('total_repos_with_topic', 'n/a')} repos"
+                    if result.success and result.result
+                    else (result.error or "failed")
+                ),
+            )
+            mcp_calls = [*mcp_calls, record.model_dump()]
+
+            if result.success and result.result:
+                github_data[tech] = {
+                    "technology": tech,
+                    "topic_repo_count": result.result.get("total_repos_with_topic", 0),
+                    "source": "github_topic_search",
+                }
+            else:
+                github_data[tech] = {"error": result.error or "failed"}
 
     # Step 2: Get job market counts from skill statistics
     skill_stats_raw = state.get("skill_statistics") or []
@@ -68,13 +147,12 @@ async def run_trend_analysis(state: GraphState) -> dict:
     # Step 3: Build combined trend snapshot
     snapshot = build_tech_trends(
         technologies=technologies,
-        github_data=github_raw,
+        github_data=github_data,
         job_skill_stats=job_skill_counts,
         total_postings=total_postings,
         sources=["github", "adzuna", "arbeitnow"],
     )
 
-    # Get top 5 for the status message
     top_5 = snapshot.get_ranked(top_n=5)
     top_5_str = ", ".join(
         f"{t.technology} ({t.popularity_score:.0f}pts)" for t in top_5
@@ -87,6 +165,7 @@ async def run_trend_analysis(state: GraphState) -> dict:
 
     return {
         "trend_data": snapshot.model_dump(),
+        "mcp_calls": mcp_calls,
         "completed_agents": state.get("completed_agents", []) + ["trend_analysis"],
         "messages": [
             AIMessage(

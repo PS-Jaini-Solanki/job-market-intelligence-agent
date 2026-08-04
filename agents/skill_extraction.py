@@ -49,7 +49,7 @@ async def run_skill_extraction(state: GraphState) -> dict:
 
     # Deserialize the job results
     job_results = JobSearchResult.model_validate(job_results_raw)
-    role = state.get("role", "AI Engineer")
+    role = state.get("role", "Software Engineer")
     country = state.get("country_filter")
 
     logger.info(

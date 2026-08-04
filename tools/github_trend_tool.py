@@ -153,7 +153,7 @@ async def _fetch_repo_stats(
 async def _search_github_topics(
     client: httpx.AsyncClient,
     topic: str,
-) -> int:
+) -> Optional[int]:
     """
     Count repositories tagged with a specific topic.
 
@@ -164,7 +164,10 @@ async def _search_github_topics(
         topic: GitHub topic string (e.g., 'langchain', 'mcp').
 
     Returns:
-        Number of repositories with this topic.
+        Number of repositories with this topic, or None if the API call
+        failed. None is distinct from 0 — a failed request must never be
+        reported as "zero repos found", since that reads as real (if
+        unpopular) data rather than a missing measurement.
     """
     url = f"{GITHUB_API_BASE}/search/repositories"
     params = {"q": f"topic:{topic.lower().replace(' ', '-')}", "per_page": 1}
@@ -173,9 +176,14 @@ async def _search_github_topics(
         response = await client.get(url, headers=_build_headers(), params=params)
         if response.status_code == 200:
             return response.json().get("total_count", 0)
-    except httpx.HTTPError:
-        pass
-    return 0
+        logger.error(
+            "GitHub topic search failed",
+            extra={"topic": topic, "status_code": response.status_code},
+        )
+        return None
+    except httpx.HTTPError as e:
+        logger.error("GitHub topic search error", extra={"topic": topic, "error": str(e)})
+        return None
 
 
 @tool
@@ -223,12 +231,19 @@ async def analyze_github_trends(technologies: list[str]) -> dict:
             else:
                 # Fall back to topic search
                 repo_count = await _search_github_topics(client, tech)
-                results[tech] = {
-                    "technology": tech,
-                    "topic_repo_count": repo_count,
-                    "source": "github_topic_search",
-                    "note": f"No canonical repo mapped — searched as topic '{tech}'",
-                }
+                if repo_count is None:
+                    results[tech] = {
+                        "technology": tech,
+                        "error": f"GitHub topic search failed for '{tech}'",
+                        "source": "github_topic_search",
+                    }
+                else:
+                    results[tech] = {
+                        "technology": tech,
+                        "topic_repo_count": repo_count,
+                        "source": "github_topic_search",
+                        "note": f"No canonical repo mapped — searched as topic '{tech}'",
+                    }
                 logger.debug(
                     "Used topic search for unknown tech",
                     extra={"tech": tech, "repo_count": repo_count},

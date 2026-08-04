@@ -56,9 +56,20 @@ def _get_skill_patterns() -> dict[str, re.Pattern]:
     Returns:
         Dictionary of alias → compiled regex pattern.
     """
+    # Single-letter/short-word aliases are too ambiguous for plain
+    # case-insensitive word-boundary matching — "r" matches "R&D", and
+    # "go" matches ordinary English ("go to", "go through", "going
+    # forward" is blocked by \b but bare "go" as its own word is still
+    # extremely common outside of the Go language). These get dedicated,
+    # case-SENSITIVE patterns with negative lookaheads below instead of
+    # the generic loop.
+    _AMBIGUOUS_ALIASES = {"r", "go"}
+
     global _SKILL_PATTERNS
     if not _SKILL_PATTERNS:
         for alias in SKILL_ALIASES:
+            if alias in _AMBIGUOUS_ALIASES:
+                continue
             # Escape the alias for regex safety, then add word boundaries
             escaped = re.escape(alias)
             try:
@@ -75,6 +86,15 @@ def _get_skill_patterns() -> dict[str, re.Pattern]:
         _SKILL_PATTERNS["c++"] = re.compile(r"\bC\+\+\b", re.IGNORECASE)
         _SKILL_PATTERNS["c#"] = re.compile(r"\bC#\b", re.IGNORECASE)
         _SKILL_PATTERNS[".net"] = re.compile(r"\.NET\b", re.IGNORECASE)
+        # "R" the language: require the capitalized standalone token and
+        # exclude "R&D" / "R & D", by far the most common false positive.
+        _SKILL_PATTERNS["r"] = re.compile(r"\bR\b(?!\s*&\s*D\b)")
+        # "Go" the language: require the capitalized standalone token and
+        # exclude it when followed by common English phrasal-verb
+        # continuations ("go to the careers page", "go live", etc.).
+        _SKILL_PATTERNS["go"] = re.compile(
+            r"\bGo\b(?!\s+(?:to|through|live|beyond|ahead|forward|further|back|public)\b)"
+        )
 
     return _SKILL_PATTERNS
 
@@ -131,6 +151,11 @@ def compute_skill_statistics(
     # Count skill occurrences across all postings
     skill_counter: Counter[str] = Counter()
 
+    # Only skills present in our curated vocabulary are counted.
+    # Raw tags from job sources (e.g. arbeitnow German tags like "Produktion")
+    # are NOT in the vocabulary and must not pollute the statistics.
+    known_skills: set[str] = set(get_all_canonical_skills())
+
     for posting in job_result.postings:
         # Extract skills from description if not already extracted
         description_text = posting.description or ""
@@ -138,7 +163,11 @@ def compute_skill_statistics(
         full_text = f"{title_text} {description_text}"
 
         # Combine explicitly listed skills with extracted ones
-        explicit_skills = [normalize_skill(s) for s in posting.skills]
+        explicit_skills = [
+            s
+            for s in (normalize_skill(x) for x in posting.skills)
+            if s in known_skills
+        ]
         extracted_skills = extract_skills_from_text(full_text)
 
         all_skills = list(dict.fromkeys(explicit_skills + extracted_skills))

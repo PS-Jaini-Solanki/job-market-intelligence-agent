@@ -60,6 +60,40 @@ class MCPServerType(str, Enum):
     FILESYSTEM = "filesystem"
     SEARCH = "search"
     REDDIT = "reddit"
+    JOBS = "jobs"
+
+
+class MCPCallRecord(BaseModel):
+    """
+    A recorded MCP tool call made by an agent during graph execution.
+
+    These records power the real-time UI ("Planner called `github` MCP ->
+    get_repo_stats for the analyze_trends task") and give an audit trail.
+    """
+
+    agent: str = Field(description="Agent that made the call")
+    server: str = Field(description="MCP server name, e.g. 'github'")
+    tool: str = Field(description="Tool name on the server, e.g. 'get_repo_stats'")
+    arguments: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Arguments passed to the tool",
+    )
+    success: bool = Field(default=True, description="Whether the call succeeded")
+    summary: str = Field(
+        default="",
+        description="Short human-readable summary of the result",
+    )
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+    def to_markdown(self) -> str:
+        """Render this call as a compact Markdown line for the UI."""
+        status = "✅" if self.success else "❌"
+        args = ", ".join(f"{k}={v}" for k, v in list(self.arguments.items())[:3])
+        summary = f" — {self.summary}" if self.summary else ""
+        return (
+            f"{status} **{self.agent}** → `{self.server}` MCP "
+            f"· `{self.tool}({args})`{summary}"
+        )
 
 
 class AgentTask(BaseModel):

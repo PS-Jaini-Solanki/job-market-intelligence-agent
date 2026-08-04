@@ -15,7 +15,10 @@ The Job Market Intelligence Agent is not a simple chatbot. It is a **Multi-Agent
    - **Resume Analysis Agent**: If a resume is uploaded, reads it via the **Filesystem MCP Server** and compares it to the market data.
 5. **Synthesis Agents**:
    - **Recommendation Agent**: Suggests what the user should learn based on gaps.
-   - **Report Generation Agent**: Formats all the collected data into a Markdown report.
+   - **Final Answer Agent**: Composes a concise, question-aligned answer from the
+     evidence so the user gets a direct reply instead of a wall of tables.
+   - **Report Generation Agent**: Formats all the collected data into a Markdown
+     report, saved to disk for the record.
 
 ## Key Technologies
 

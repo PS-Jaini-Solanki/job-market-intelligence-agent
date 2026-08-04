@@ -46,6 +46,20 @@ ADZUNA_COUNTRY_PATHS: dict[str, str] = {
     "AE": "ae",    # UAE
 }
 
+# Adzuna reports salaries in the local currency of each country board.
+# We label them correctly so salary statistics are never misattributed.
+ADZUNA_COUNTRY_CURRENCIES: dict[str, str] = {
+    "IN": "INR",   # India — Rupee
+    "US": "USD",   # United States — Dollar
+    "GB": "GBP",   # United Kingdom — Pound
+    "AU": "AUD",   # Australia — Dollar
+    "CA": "CAD",   # Canada — Dollar
+    "DE": "EUR",   # Germany — Euro
+    "FR": "EUR",   # France — Euro
+    "SG": "SGD",   # Singapore — Dollar
+    "AE": "AED",   # UAE — Dirham
+}
+
 
 async def _search_adzuna(
     role: str,
@@ -108,7 +122,9 @@ async def _search_adzuna(
                     salary = SalaryRange(
                         min_value=item.get("salary_min"),
                         max_value=item.get("salary_max"),
-                        currency="GBP" if country_path == "gb" else "USD",
+                        currency=ADZUNA_COUNTRY_CURRENCIES.get(
+                            country_code.upper(), "USD"
+                        ),
                         period="year",
                     )
 
@@ -216,9 +232,24 @@ def _parse_date(date_str: str | None) -> datetime | None:
     """
     if not date_str:
         return None
-    for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S+00:00"):
+
+    # Arbeitnow sometimes emits epoch timestamps (int/float) for created_at.
+    if isinstance(date_str, (int, float)):
         try:
-            return datetime.strptime(date_str[:19], fmt[:len(date_str)])
+            return datetime.fromtimestamp(float(date_str))
+        except (ValueError, OverflowError, OSError):
+            return None
+
+    # Normalize the common ISO-8601 "Z" suffix to an explicit offset.
+    normalized = str(date_str).strip().replace("Z", "+00:00")
+
+    for fmt in (
+        "%Y-%m-%dT%H:%M:%S+00:00",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d",
+    ):
+        try:
+            return datetime.strptime(normalized, fmt)
         except (ValueError, TypeError):
             continue
     return None

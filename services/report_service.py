@@ -262,6 +262,89 @@ class ReportBuilder:
         self._recommendations.append(recommendation)
         return self
 
+    def add_country_comparison_section(self, comparison: dict) -> "ReportBuilder":
+        """
+        Add a country comparison section.
+
+        Args:
+            comparison: Output of the country_comparison_tool.
+        """
+        countries = comparison.get("countries", {})
+        role = comparison.get("role_analyzed", "role")
+        sources = comparison.get("sources", ["adzuna"])
+
+        if not countries:
+            return self
+
+        self._sources.update(sources)
+        rows = [
+            "| Metric | " + " | ".join(c for c in countries) + " |",
+            "|--------|" + "------|" * len(countries),
+        ]
+
+        # Job volume row
+        volume = [str(v.get("posting_count", 0)) for v in countries.values()]
+        rows.append("| **Postings found** | " + " | ".join(volume) + " |")
+
+        # Salary row
+        salary_cells = []
+        for v in countries.values():
+            sal = v.get("salary", {})
+            if sal.get("median"):
+                salary_cells.append(
+                    f"{sal.get('currency', '')} {sal['median']:,.0f}"
+                    f" (n={sal.get('sample_count', 0)})"
+                )
+            else:
+                salary_cells.append("N/A")
+        rows.append("| **Median salary** | " + " | ".join(salary_cells) + " |")
+
+        # Top skills row (each country's top 5 in its own column)
+        skills_cells = []
+        for v in countries.values():
+            skills = [s["skill"] for s in v.get("top_skills", [])[:5]]
+            skills_cells.append(", ".join(skills) if skills else "N/A")
+        rows.append("| **Top skills** | " + " | ".join(skills_cells) + " |")
+
+        insights = comparison.get("cross_country_insights", {})
+        insights_block = ""
+        common = insights.get("common_skills", [])
+        if common:
+            insights_block = (
+                f"\n\n**Common skills across markets:** {', '.join(common[:8])}"
+            )
+        unique = insights.get("unique_skills_by_country", {})
+        if unique:
+            for code, skills in unique.items():
+                if skills:
+                    insights_block += (
+                        f"\n- **Unique to {code}:** {', '.join(skills[:5])}"
+                    )
+
+        content = (
+            f"Side-by-side job market comparison for **{role}** "
+            f"based on live postings from {', '.join(sources)}.\n\n"
+            + "\n".join(rows)
+            + insights_block
+            + "\n\n*Country data reflects the coverage of our job sources, "
+            "not the true market size.*"
+        )
+
+        evidence = [
+            f"Country comparison: {', '.join(countries)} markets compared "
+            f"— Source: {', '.join(sources)}"
+        ]
+
+        self._sections.append(
+            ReportSection(
+                title="Country Comparison",
+                content=content,
+                evidence=evidence,
+                sources=sources,
+            )
+        )
+        return self
+
     def add_limitation(self, limitation: str) -> "ReportBuilder":
         """Add a data limitation note to the report."""
         self._limitations.append(limitation)

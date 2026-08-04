@@ -3,7 +3,7 @@
 An advanced, production-quality Agentic AI system that analyzes the technology job market using multi-agent orchestration, MCP (Model Context Protocol), and real-time tool calling.
 
 ## Features
-- **Multi-Agent Architecture**: Built with LangGraph, utilizing specialized agents (Planner, Market Collection, Skill Extraction, Trend Analysis, Resume Analysis, Recommendation, Report Generation).
+- **Multi-Agent Architecture**: Built with LangGraph, utilizing specialized agents (Planner, Market Collection, Skill Extraction, Trend Analysis, Resume Analysis, Recommendation, Final Answer, Report Generation).
 - **Zero Hallucination Guarantee**: All market statistics are derived from real-time job posting data via tool calling, never from LLM memory.
 - **MCP Integration**: Uses the Model Context Protocol to standardize communication with tools (GitHub, Filesystem, Search, Reddit).
 - **Resume Gap Analysis**: Compares your uploaded resume against current market requirements to identify missing skills.

@@ -19,6 +19,7 @@ import logging
 from langchain_core.messages import AIMessage
 
 from agents.state import GraphState
+from models.agent import MCPCallRecord
 from models.trend import TrendSnapshot
 from models.resume import ResumeAnalysis
 from models.skill import Skill, SkillStatistic
@@ -42,12 +43,13 @@ async def run_report_generation(state: GraphState) -> dict:
     logger.info("Report generation starting")
 
     query = state["user_query"]
-    role = state.get("role", "AI Engineer")
+    role = state.get("role", "Software Engineer")
     country = state.get("country_filter")
     skill_stats_raw = state.get("skill_statistics") or []
     salary_raw = state.get("salary_data")
     trend_raw = state.get("trend_data")
     resume_analysis_raw = state.get("resume_analysis")
+    comparison_raw = state.get("country_comparison")
     recommendations = state.get("recommendations") or []
 
     # Initialize the report builder
@@ -111,6 +113,13 @@ async def run_report_generation(state: GraphState) -> dict:
         except Exception as e:
             logger.warning("Could not build resume section", extra={"error": str(e)})
 
+    # --- Add Country Comparison Section ---
+    if comparison_raw and "error" not in comparison_raw:
+        try:
+            builder.add_country_comparison_section(comparison_raw)
+        except Exception as e:
+            logger.warning("Could not build comparison section", extra={"error": str(e)})
+
     # --- Add Recommendations ---
     for rec in recommendations:
         builder.add_recommendation(rec)
@@ -126,6 +135,7 @@ async def run_report_generation(state: GraphState) -> dict:
         "has_salary_data": bool(salary_raw and salary_raw.get("sample_count", 0) > 0),
         "has_trend_data": bool(trend_raw),
         "has_resume_analysis": bool(resume_analysis_raw),
+        "has_country_comparison": bool(comparison_raw and "error" not in comparison_raw),
     }
 
     executive_summary = ""
@@ -146,6 +156,39 @@ async def run_report_generation(state: GraphState) -> dict:
     # --- Build final report ---
     report = builder.build(executive_summary=executive_summary.strip())
 
+    # --- Persist report via filesystem MCP (visible in UI) ---
+    mcp_calls = state.get("mcp_calls", []) or []
+    save_result = None
+    try:
+        from mcp_servers.registry import get_registry
+        registry = get_registry()
+        query_id = state.get("query_id") or "report"
+        save_result = await registry.call_tool(
+            "filesystem",
+            "save_report",
+            {
+                "filename": f"market_report_{query_id}.md",
+                "content": report.to_markdown(),
+            },
+        )
+        mcp_calls = [
+            *mcp_calls,
+            MCPCallRecord(
+                agent="report_generation",
+                server="filesystem",
+                tool="save_report",
+                arguments={"filename": f"market_report_{query_id}.md"},
+                success=save_result.success,
+                summary=(
+                    f"Saved to {save_result.result.get('saved_to', 'reports/')}"
+                    if save_result.success and save_result.result
+                    else (save_result.error or "save failed")
+                ),
+            ).model_dump(),
+        ]
+    except Exception as e:
+        logger.warning("Could not save report via filesystem MCP", extra={"error": str(e)})
+
     logger.info(
         "Report generation complete",
         extra={
@@ -158,6 +201,7 @@ async def run_report_generation(state: GraphState) -> dict:
     return {
         "final_report": report.model_dump(),
         "executive_summary": executive_summary,
+        "mcp_calls": mcp_calls,
         "completed_agents": state.get("completed_agents", []) + ["report_generation"],
         "messages": [
             AIMessage(

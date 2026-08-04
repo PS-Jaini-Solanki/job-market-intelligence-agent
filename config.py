@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = Field(default="job_market_db")
     POSTGRES_USER: str = Field(default="job_market_user")
     POSTGRES_PASSWORD: str = Field(default="changeme")
-    DATABASE_URL: str = Field(
+    SQLALCHEMY_DATABASE_URL: str = Field(
         default="postgresql+asyncpg://job_market_user:changeme@localhost:5432/job_market_db"
     )
 
@@ -108,13 +108,25 @@ class Settings(BaseSettings):
     @property
     def database_url_masked(self) -> str:
         """Return database URL with password masked (safe to log)."""
-        return self.DATABASE_URL.replace(self.POSTGRES_PASSWORD, "***")
+        return self.SQLALCHEMY_DATABASE_URL.replace(self.POSTGRES_PASSWORD, "***")
+
+    # Placeholder values shipped in .env.example — treat as "not configured"
+    # so a user who never filled these in doesn't get silent, confusing
+    # failures from reddit_mcp trying to authenticate with fake credentials.
+    _PLACEHOLDER_VALUES: set[str] = {
+        "your_reddit_client_id",
+        "your_reddit_client_secret",
+    }
 
     @computed_field
     @property
     def has_reddit(self) -> bool:
-        """True if Reddit credentials are configured."""
-        return bool(self.REDDIT_CLIENT_ID and self.REDDIT_CLIENT_SECRET)
+        """True if real (non-placeholder) Reddit credentials are configured."""
+        client_id = (self.REDDIT_CLIENT_ID or "").strip()
+        client_secret = (self.REDDIT_CLIENT_SECRET or "").strip()
+        if client_id in self._PLACEHOLDER_VALUES or client_secret in self._PLACEHOLDER_VALUES:
+            return False
+        return bool(client_id and client_secret)
 
     @computed_field
     @property

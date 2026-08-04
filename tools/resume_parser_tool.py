@@ -58,7 +58,15 @@ def extract_text_from_pdf(file_path: Path) -> str:
     except ImportError as e:
         raise ImportError("pypdf is required for PDF parsing: pip install pypdf") from e
 
-    reader = PdfReader(str(file_path))
+    try:
+        reader = PdfReader(str(file_path))
+    except Exception as e:
+        # PdfReader construction itself can raise (empty file, corrupted
+        # stream, encrypted PDF, etc.) — this was previously uncaught,
+        # so a bad upload crashed with a raw pypdf exception instead of
+        # the ValueError this function's docstring promises.
+        raise ValueError(f"Corrupted or unreadable PDF file: {e}") from e
+
     text_parts = []
 
     for page_num, page in enumerate(reader.pages):

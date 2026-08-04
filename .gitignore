@@ -86,6 +86,9 @@ runs/
 # Uploaded files
 uploads/
 
+# Generated reports
+reports/
+
 # Docker
 .dockerignore
 docker-compose.override.yml

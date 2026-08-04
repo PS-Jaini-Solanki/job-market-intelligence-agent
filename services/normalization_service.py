@@ -113,6 +113,7 @@ SKILL_ALIASES: dict[str, str] = {
     "ts": "TypeScript",
     "golang": "Go",
     "go lang": "Go",
+    "go": "Go",
     "rust": "Rust",
     "java": "Java",
     "c++": "C++",

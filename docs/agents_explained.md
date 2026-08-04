@@ -19,4 +19,5 @@ We use **LangGraph** to orchestrate our agents. LangGraph represents the workflo
 - **Trend Analysis**: Looks at GitHub to see if those skills are actually growing in popularity.
 - **Resume Analysis**: Compares a user's uploaded resume to the market data to find gaps.
 - **Recommendation**: Looks at the gaps and market demand to suggest what to learn next.
+- **Final Answer**: Composes a concise, question-aligned answer from the evidence so the chat reply is short and to the point.
 - **Report Generation**: The "writer". It takes all the gathered data and formats it into a professional report.

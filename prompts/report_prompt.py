@@ -71,7 +71,17 @@ def build_recommendation_prompt(analysis_data: dict, user_context: str = "") -> 
         Formatted prompt string.
     """
     context_note = f"\nUser context: {user_context}" if user_context else ""
-    return f"""Generate 3-6 prioritized learning recommendations based on this market data:{context_note}
+
+    skills_note = ""
+    if analysis_data.get("user_skills"):
+        skills_note = (
+            "\n\nCRITICAL: The user ALREADY has these skills:\n"
+            + ", ".join(analysis_data["user_skills"])
+            + "\nNever recommend a skill from that list — only recommend skills "
+            "the user does NOT have yet."
+        )
+
+    return f"""Generate 3-6 prioritized learning recommendations based on this market data:{context_note}{skills_note}
 
 Market Data:
 {analysis_data}

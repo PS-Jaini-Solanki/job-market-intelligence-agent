@@ -75,7 +75,7 @@ def get_engine() -> AsyncEngine:
             extra={"database_url": settings.database_url_masked},
         )
         _engine = create_async_engine(
-            settings.DATABASE_URL,
+            settings.SQLALCHEMY_DATABASE_URL,
             # Pool settings
             pool_size=10,          # Number of connections to keep open
             max_overflow=20,       # Extra connections allowed under load

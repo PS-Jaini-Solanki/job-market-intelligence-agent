@@ -1,6 +1,6 @@
 """
 agents/graph.py
-================
+===============
 LangGraph execution graph — wires all agents together.
 
 HOW LANGGRAPH WORKS:
@@ -11,11 +11,13 @@ HOW LANGGRAPH WORKS:
 5. Each node can conditionally route to different next nodes.
 
 GRAPH FLOW:
-START → planner → market_collection → skill_extraction
-       → trend_analysis (conditional) → resume_analysis (conditional)
-       → recommendation → report_generation → END
+START → query_classifier
+       ├── analytical intent → planner → market_collection → skill_extraction
+       │        → trend_analysis (conditional) → resume_analysis (conditional)
+       │        → recommendation → report_generation → END
+       └── conversational intent → chat_responder → END
 
-The planner's output determines which optional agents run.
+The QueryClassifier decides between the two families.
 """
 
 from __future__ import annotations
@@ -25,6 +27,11 @@ from typing import Literal
 
 from langgraph.graph import END, START, StateGraph
 
+from agents.classifier import is_analytical
+from agents.chat_responder import run_chat_responder
+from agents.classifier import run_query_classifier
+from agents.country_comparison import run_country_comparison
+from agents.final_answer import run_final_answer
 from agents.market_collection import run_market_collection
 from agents.planner import run_planner
 from agents.recommendation import run_recommendation
@@ -40,8 +47,33 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # Conditional routing functions
 # ============================================================
-# These functions determine which node to go to next based on state.
-# LangGraph uses them to build conditional edges in the graph.
+
+
+def route_after_classifier(state: GraphState) -> Literal["planner", "chat_responder"]:
+    """
+    Route to the analytical pipeline or the direct chat responder.
+
+    The classifier's intent decides:
+    - Analytical (job_market, salary, trends, comparison, resume) → planner
+    - Conversational (general_chat, out_of_scope) → chat_responder
+    """
+    intent = state.get("query_intent")
+    if is_analytical(intent):
+        return "planner"
+    return "chat_responder"
+
+
+def route_after_planner(state: GraphState) -> Literal["market_collection", "chat_responder"]:
+    """
+    After planning, either start collecting data or hand off to chat.
+
+    If the planner could not build a valid plan (should_stop), the
+    ChatResponder explains gracefully instead of silently failing.
+    """
+    if state.get("should_stop"):
+        logger.warning("Graph stopping planning due to invalid/empty plan")
+        return "chat_responder"
+    return "market_collection"
 
 
 def should_analyze_trends(
@@ -50,9 +82,8 @@ def should_analyze_trends(
     """
     Decide whether to run trend analysis based on the plan.
 
-    Runs trend analysis if:
-    - The plan includes an analyze_trends task, OR
-    - Technologies to analyze are present in state.
+    Runs trend analysis if the plan includes an analyze_trends task or
+    technologies are present in state.
     """
     plan = state.get("execution_plan", {})
     tasks = plan.get("tasks", [])
@@ -65,29 +96,59 @@ def should_analyze_trends(
     return "resume_analysis"
 
 
+def _has_compare_countries_task(state: GraphState) -> bool:
+    """True if the plan contains a compare_countries task."""
+    plan = state.get("execution_plan", {})
+    tasks = plan.get("tasks", [])
+    return any(t.get("task_type") == "compare_countries" for t in tasks)
+
+
+
+# Intents where running resume analysis actually serves the question.
+# A resume uploaded earlier in the conversation stays in session state
+# for the rest of the chat (see chainlit_ui/app.py), so `resume_path`
+# can still be set on turns that have nothing to do with the resume —
+# e.g. "what's the average salary in Germany?" right after uploading a
+# resume for an India role. Running (and expensively LLM-scoring) a
+# resume gap analysis on every later turn regardless of relevance was
+# both wasted work and, until final_answer.py was fixed to also check
+# intent, the reason unrelated questions got a stale resume report
+# instead of an answer.
+_RESUME_RELEVANT_INTENTS = {"resume_analysis", "job_market"}
+
+
 def should_analyze_resume(
     state: GraphState,
-) -> Literal["resume_analysis", "recommendation"]:
+) -> Literal["resume_analysis", "comparison_agent", "recommendation"]:
     """
     Decide whether to run resume analysis based on the plan.
 
-    Runs resume analysis if a resume_path exists in state.
+    Runs resume analysis only if a resume_path exists AND the current
+    turn's intent is actually resume-relevant. Otherwise, if a
+    compare_countries task is pending, route to the comparison agent so
+    it is never skipped by the trend-analysis path.
     """
-    if state.get("resume_path"):
+    if state.get("resume_path") and state.get("query_intent") in _RESUME_RELEVANT_INTENTS:
         return "resume_analysis"
+    if _has_compare_countries_task(state):
+        return "comparison_agent"
     return "recommendation"
 
 
-def should_stop_on_error(
+def should_run_country_comparison(
     state: GraphState,
-) -> Literal["market_collection", END]:
+) -> Literal["comparison_agent", "recommendation"]:
     """
-    Stop execution if a critical error occurred in the planner.
+    Decide whether a dedicated country comparison step is needed.
+
+    Only used when the plan explicitly contains a compare_countries task.
     """
-    if state.get("should_stop"):
-        logger.warning("Graph stopping due to critical error flag")
-        return END
-    return "market_collection"
+    plan = state.get("execution_plan", {})
+    tasks = plan.get("tasks", [])
+    has_comparison = any(t.get("task_type") == "compare_countries" for t in tasks)
+    if has_comparison:
+        return "comparison_agent"
+    return "recommendation"
 
 
 # ============================================================
@@ -99,8 +160,6 @@ def build_graph() -> StateGraph:
     """
     Build and compile the multi-agent LangGraph.
 
-    The graph defines the execution flow for all agent interactions.
-
     Returns:
         A compiled LangGraph StateGraph ready for execution.
 
@@ -108,29 +167,38 @@ def build_graph() -> StateGraph:
         graph = build_graph()
         result = await graph.ainvoke(initial_state)
     """
-    # Create the state graph
     graph = StateGraph(GraphState)
 
     # --- Add all agent nodes ---
-    # Each node is a function that takes state and returns a partial update
+    graph.add_node("query_classifier", run_query_classifier)
+    graph.add_node("chat_responder", run_chat_responder)
     graph.add_node("planner", run_planner)
     graph.add_node("market_collection", run_market_collection)
     graph.add_node("skill_extraction", run_skill_extraction)
     graph.add_node("trend_analysis", run_trend_analysis)
     graph.add_node("resume_analysis", run_resume_analysis)
+    graph.add_node("comparison_agent", run_country_comparison)
     graph.add_node("recommendation", run_recommendation)
+    graph.add_node("final_answer", run_final_answer)
     graph.add_node("report_generation", run_report_generation)
 
-    # --- Add edges ---
+    # --- Edges ---
+    # START → classifier → (planner | chat_responder)
+    graph.add_edge(START, "query_classifier")
+    graph.add_conditional_edges(
+        "query_classifier",
+        route_after_classifier,
+        {"planner": "planner", "chat_responder": "chat_responder"},
+    )
 
-    # START → planner (always)
-    graph.add_edge(START, "planner")
+    # chat_responder → END (direct answer, no report)
+    graph.add_edge("chat_responder", END)
 
-    # planner → market_collection (or END if critical error)
+    # planner → market_collection (or chat_responder if no valid plan)
     graph.add_conditional_edges(
         "planner",
-        should_stop_on_error,
-        {"market_collection": "market_collection", END: END},
+        route_after_planner,
+        {"market_collection": "market_collection", "chat_responder": "chat_responder"},
     )
 
     # market_collection → skill_extraction (always)
@@ -146,21 +214,35 @@ def build_graph() -> StateGraph:
         },
     )
 
-    # trend_analysis → resume_analysis OR recommendation (conditional)
+    # trend_analysis → resume_analysis OR comparison_agent OR recommendation (conditional)
     graph.add_conditional_edges(
         "trend_analysis",
         should_analyze_resume,
         {
             "resume_analysis": "resume_analysis",
+            "comparison_agent": "comparison_agent",
             "recommendation": "recommendation",
         },
     )
 
-    # resume_analysis → recommendation (always)
-    graph.add_edge("resume_analysis", "recommendation")
+    # resume_analysis → comparison_agent OR recommendation (conditional)
+    graph.add_conditional_edges(
+        "resume_analysis",
+        should_run_country_comparison,
+        {
+            "comparison_agent": "comparison_agent",
+            "recommendation": "recommendation",
+        },
+    )
 
-    # recommendation → report_generation (always)
-    graph.add_edge("recommendation", "report_generation")
+    # comparison_agent → recommendation (always)
+    graph.add_edge("comparison_agent", "recommendation")
+
+    # recommendation → final_answer → report_generation (always)
+    # The FinalAnswer agent writes the concise question-aligned answer first;
+    # ReportGeneration then persists the full report to disk for the record.
+    graph.add_edge("recommendation", "final_answer")
+    graph.add_edge("final_answer", "report_generation")
 
     # report_generation → END (always)
     graph.add_edge("report_generation", END)
