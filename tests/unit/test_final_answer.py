@@ -188,6 +188,36 @@ def test_resume_analysis_still_wins_for_resume_intent_even_with_other_data():
     assert "Market Fit Score" in answer
 
 
+def test_default_role_disclaimer_shown_when_role_was_guessed():
+    # Regression: a real observed complaint — the Planner silently
+    # defaults role to "Software Engineer" whenever the user doesn't
+    # mention one, and the answer quoted it back as if the user had
+    # asked about that role specifically, making the system look
+    # hardcoded to one role instead of dynamic.
+    state = _state(query_intent="job_market", role="Software Engineer", role_is_default=True)
+    answer = compose_final_answer(state)
+    assert "didn't mention a specific role" in answer
+
+
+def test_no_default_role_disclaimer_when_role_was_explicit():
+    state = _state(
+        query_intent="job_market",
+        role="Data Scientist",
+        role_is_default=False,
+        skill_statistics=SAMPLE_SKILL_STATS,
+    )
+    answer = compose_final_answer(state)
+    assert "didn't mention a specific role" not in answer
+
+
+def test_resume_missing_answer_does_not_quote_default_role():
+    # A defaulted role has no place in a message about a missing file.
+    state = _state(query_intent="resume_analysis", role="Software Engineer", role_is_default=True)
+    answer = compose_final_answer(state)
+    assert "Software Engineer" not in answer
+    assert "don't see a resume attached" in answer
+
+
 def test_no_data_fallback():
     state = _state(query_intent="job_market", role="AI Engineer")
     answer = compose_final_answer(state)

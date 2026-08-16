@@ -42,6 +42,25 @@ async def run_report_generation(state: GraphState) -> dict:
     """
     logger.info("Report generation starting")
 
+    # If the user asked a resume question but no resume was ever attached,
+    # there's nothing real to report on. market_collection/skill_extraction
+    # still ran (they always do, so data is ready in case a resume shows
+    # up), but presenting that side-collected, unrelated market data as a
+    # polished "Job Market Intelligence Report" — right next to a chat
+    # answer that correctly says no resume was found — is a direct,
+    # visible contradiction: the report looks like a complete, successful
+    # analysis for a question that was never actually answered. Skip the
+    # report entirely rather than manufacture one.
+    if state.get("query_intent") == "resume_analysis" and not state.get("resume_data"):
+        logger.info("Skipping report generation — no resume was attached to analyze")
+        return {
+            "final_report": None,
+            "completed_agents": state.get("completed_agents", []) + ["report_generation"],
+            "messages": [
+                AIMessage(content="📄 No report generated — no resume was attached to analyze.")
+            ],
+        }
+
     query = state["user_query"]
     role = state.get("role", "Software Engineer")
     country = state.get("country_filter")

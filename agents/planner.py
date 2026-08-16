@@ -16,9 +16,14 @@ HOW IT WORKS:
 4. Plan is stored in state.execution_plan
 5. Other agents read the plan and execute their assigned tasks
 
-IMPORTANT DESIGN CHANGE:
-The planner NEVER guesses a role. If the user didn't mention a job role,
-role stays None and the plan reflects that (generic market overview).
+ROLE DEFAULTING:
+If the user didn't mention a job role, the planner falls back to a
+generic default (`_default_role_for_query`) rather than leaving role
+unset, since the collection agents need a concrete role string to query
+the job APIs with. This default is tracked via `role_is_default` in the
+returned state so downstream agents (see agents/final_answer.py) can be
+honest that it's a guess-of-last-resort rather than presenting it as
+something the user asked about.
 
 This is "task decomposition" — a core pattern in Agentic AI.
 """
@@ -150,8 +155,15 @@ async def run_planner(state: GraphState) -> dict:
     # For genuine analytical queries with no explicit role, use a sensible
     # generic market default — this is a real job-market question, not an
     # ambiguous one, so a concrete role is required to search APIs.
+    # Track that this is a GUESS, not something the user actually said —
+    # without this flag, downstream messages quoted the default role back
+    # at the user as if they had asked about it, which reads as the system
+    # being hardcoded to one role rather than genuinely adapting to what
+    # was asked.
+    role_is_default = False
     if not role and intent in ANALYTICAL_INTENTS:
         role = _default_role_for_query(user_query)
+        role_is_default = True
 
     technologies = state.get("technologies_to_analyze") or []
     if not technologies:
@@ -233,6 +245,7 @@ async def run_planner(state: GraphState) -> dict:
         "execution_plan": plan.model_dump(),
         "query_type": plan.query_type,
         "role": role,
+        "role_is_default": role_is_default,
         "country_filter": country,
         "countries": countries,
         "technologies_to_analyze": technologies,

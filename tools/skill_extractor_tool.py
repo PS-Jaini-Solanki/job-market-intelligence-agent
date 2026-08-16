@@ -63,7 +63,7 @@ def _get_skill_patterns() -> dict[str, re.Pattern]:
     # extremely common outside of the Go language). These get dedicated,
     # case-SENSITIVE patterns with negative lookaheads below instead of
     # the generic loop.
-    _AMBIGUOUS_ALIASES = {"r", "go"}
+    _AMBIGUOUS_ALIASES = {"r", "go", "claude"}
 
     global _SKILL_PATTERNS
     if not _SKILL_PATTERNS:
@@ -95,6 +95,20 @@ def _get_skill_patterns() -> dict[str, re.Pattern]:
         _SKILL_PATTERNS["go"] = re.compile(
             r"\bGo\b(?!\s+(?:to|through|live|beyond|ahead|forward|further|back|public)\b)"
         )
+        # "Claude" the AI product vs. "Claude" the first name: exclude when
+        # immediately followed by a capitalized word, the shape of a full
+        # person name ("Claude Martinez", "Claude Monet", a recruiter or
+        # hiring manager credited in the posting). This doesn't catch every
+        # case (a bare "our contact is Claude" still slips through), but it
+        # removes the most common false-positive shape. "anthropic claude"
+        # (the two-word phrase) is unaffected — it's matched separately by
+        # its own alias and needs no such guard, since nobody's surname is
+        # "Anthropic".
+        # No re.IGNORECASE here: the negative lookahead relies on
+        # distinguishing capitalized from lowercase text (a name-shaped
+        # continuation like " Martinez"), so the word itself is matched
+        # case-insensitively via an explicit character class instead.
+        _SKILL_PATTERNS["claude"] = re.compile(r"\b[Cc]laude\b(?!\s+[A-Z][a-z]+)")
 
     return _SKILL_PATTERNS
 

@@ -58,6 +58,16 @@ class GraphState(TypedDict):
     # Job role to search for (e.g., "AI Engineer")
     role: Optional[str]
 
+    # True when `role` was never actually mentioned by the user (in this
+    # query or an earlier turn) and was filled in by the Planner's generic
+    # fallback default instead. Lets downstream agents be honest that a
+    # role is a guess-of-last-resort rather than silently presenting it as
+    # if the user had asked about that specific role — without this, a
+    # user who never mentioned "Software Engineer" would see it quoted
+    # back at them as though they had, which reads as the system being
+    # hardcoded to one role instead of a dynamic one.
+    role_is_default: Optional[bool]
+
     # Path to uploaded resume file, if any
     resume_path: Optional[str]
 
@@ -187,6 +197,7 @@ def create_initial_state(
         country_filter=country_filter,
         countries=[],
         role=role,
+        role_is_default=False,
         resume_path=resume_path,
         technologies_to_analyze=technologies or [],
         query_intent=None,

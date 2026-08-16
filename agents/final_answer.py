@@ -59,6 +59,25 @@ def _sources(state: GraphState) -> list[str]:
     return sorted(sources) or ["adzuna", "arbeitnow"]
 
 
+def _role_default_disclaimer(state: GraphState) -> str:
+    """
+    A trailing note shown whenever the answer's role came from the
+    Planner's generic fallback default rather than something the user
+    actually said. Without this, a user who never mentioned a role saw
+    "Software Engineer" quoted back at them as if they'd asked about it —
+    reading as the system being hardcoded to one role rather than a
+    dynamic one that adapts to whatever role is actually asked about.
+    """
+    if not state.get("role_is_default"):
+        return ""
+    role = state.get("role") or "Software Engineer"
+    return (
+        f"\n\n_You didn't mention a specific role, so this is a general **{role}** "
+        'market overview — ask about a specific role (e.g. "Data Scientist", '
+        '"DevOps Engineer", "Cloud Engineer") to get results for that role instead._'
+    )
+
+
 # ============================================================
 # Per-question composers
 # ============================================================
@@ -149,6 +168,28 @@ def _compose_resume_no_market_data_answer(state: GraphState) -> str:
     return "\n".join(lines)
 
 
+def _compose_resume_missing_answer(state: GraphState) -> str:
+    """
+    Answer a resume question when no resume was ever attached.
+
+    Distinct from `_compose_resume_no_market_data_answer`, which handles
+    "resume was read but no market data to compare it against". This
+    handles the case where there's no resume_data at all — no file was
+    attached, or attaching it failed silently.
+    """
+    role = state.get("role")
+    role_is_default = bool(state.get("role_is_default"))
+    # Don't mention a role the user never actually asked about — a
+    # Planner-guessed default has no place in a message that's purely
+    # about a missing file.
+    role_hint = f" for a **{role}** role" if role and not role_is_default else ""
+    return (
+        "I don't see a resume attached to this conversation yet"
+        f"{role_hint}. Please attach a PDF, DOCX, or TXT file with your "
+        "next message and I'll compare it against real job postings."
+    )
+
+
 def _compose_job_market_answer(state: GraphState) -> str:
     """Answer 'what skills are in demand for X?' directly."""
     role = state.get("role") or "Software Engineer"
@@ -160,7 +201,7 @@ def _compose_job_market_answer(state: GraphState) -> str:
         return (
             f"I couldn't find enough live postings for **{role}** "
             f"{'in ' + country if country else 'in the global market'} right now. "
-            "Please try again in a moment."
+            "Please try again in a moment." + _role_default_disclaimer(state)
         )
 
     total = skill_stats[0].get("total_postings", 0)
@@ -185,7 +226,7 @@ def _compose_job_market_answer(state: GraphState) -> str:
     lines.extend(
         ["", "*Percentages are of the analyzed postings only — not the whole market.*"]
     )
-    return "\n".join(lines)
+    return "\n".join(lines) + _role_default_disclaimer(state)
 
 
 def _compose_salary_answer(state: GraphState) -> str:
@@ -200,6 +241,7 @@ def _compose_salary_answer(state: GraphState) -> str:
         return (
             f"Not enough salary data for **{role}**{location} right now — "
             "fewer than a handful of live postings disclosed compensation."
+            + _role_default_disclaimer(state)
         )
 
     currency = salary.get("currency", "USD")
@@ -224,7 +266,7 @@ def _compose_salary_answer(state: GraphState) -> str:
     lines.extend(
         ["", "*Only a fraction of postings list salaries — treat as indicative.*"]
     )
-    return "\n".join(lines)
+    return "\n".join(lines) + _role_default_disclaimer(state)
 
 
 def _compose_trend_answer(state: GraphState) -> str:
@@ -356,6 +398,15 @@ def compose_final_answer(state: GraphState) -> str:
     # job-market "no postings" message that never mentions it.
     if intent == "resume_analysis" and has_resume_data and not has_resume_analysis:
         return _compose_resume_no_market_data_answer(state)
+    # The user asked a resume question but no resume was ever actually
+    # attached to this conversation (resume_data is only set once a file
+    # is successfully parsed). Without this branch, this fell all the way
+    # through to the generic job-market composer, which silently answered
+    # with whatever role/country happened to be in state — producing an
+    # answer that looked plausible but had nothing to do with the resume
+    # request and never told the user a file was missing.
+    if intent == "resume_analysis" and not has_resume_data:
+        return _compose_resume_missing_answer(state)
     if intent == "salary":
         return _compose_salary_answer(state)
     if intent == "tech_trend":

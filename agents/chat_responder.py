@@ -22,6 +22,7 @@ NO REPORT IS GENERATED. The answer goes straight to the user.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Optional
 
 from langchain_core.messages import AIMessage
@@ -45,6 +46,25 @@ _FACTUAL_QUESTION_RE = (
     r"\b(what is|what are|who is|when did|when was|where is|how to|how much|how many|why|"
     r"meaning of|definition of|history of|difference between|news|latest|current|2025|2026|"
     r"weather|capital of|population of)\b"
+)
+
+# "Who is <person>?" / Hinglish "<name> kon/kaun hai" — identity lookups
+# about a specific person. This agent's job is job-market intelligence,
+# not a people-search tool: answering these via web search + LLM summary
+# risks confidently discussing (or hallucinating about) a real, possibly
+# private individual by name — a real observed case had it summarizing
+# what it found about a specific named person from a resume filename.
+# These get redirected instead of answered, regardless of who the person
+# is (a public figure included) — that's simply out of this agent's scope.
+_PERSON_LOOKUP_RE = re.compile(
+    r"(\bwho\s+is\b|\bwho'?s\b|\bkon\s+hai\b|\bkaun\s+hai\b)", re.IGNORECASE
+)
+
+PERSON_LOOKUP_REDIRECT_MESSAGE = (
+    "I'm scoped to tech job-market intelligence, not looking people up — I don't have a "
+    "reliable way to verify who someone is, and getting that wrong about a real person is "
+    "worse than not answering. Ask me about skills, salaries, tech trends, or how your "
+    "resume matches the market instead!"
 )
 
 
@@ -71,15 +91,20 @@ def _quick_template(intent: Optional[str], query: str) -> Optional[str]:
 
         capability_markers = ("what can you do", "what do you do", "how can you help",
                               "who are you", "your capabilities", "your features",
-                              "what are you", "how do you work", "help")
-        if any(m in q for m in capability_markers):
+                              "what are you", "how do you work")
+        # Bare "help"/"help me" is only a capability question when it's the
+        # WHOLE message — "help" as a substring anywhere (e.g. "help me
+        # compare salaries") is an ordinary request, not a request to
+        # explain what this bot can do. This mirrors the same fix in
+        # agents/classifier.py's _CAPABILITY_RE / _BARE_HELP_RE.
+        is_bare_help = q.rstrip("!.? ") in ("help", "help me")
+        if any(m in q for m in capability_markers) or is_bare_help:
             return CAPABILITIES_MESSAGE
     return None
 
 
 def _wants_search(query: str) -> bool:
     """Decide whether the chat responder should ground with web search."""
-    import re
     return re.search(_FACTUAL_QUESTION_RE, query, re.IGNORECASE) is not None
 
 
@@ -119,6 +144,16 @@ async def run_chat_responder(state: GraphState) -> dict:
             "direct_answer": template,
             "completed_agents": state.get("completed_agents", []) + ["chat_responder"],
             "messages": [AIMessage(content=template)],
+        }
+
+    # --- 1b. Person-identity lookups are out of scope, always -----------
+    # Checked before web-search grounding so a "who is <name>" question
+    # never reaches the search+LLM path at all, regardless of intent.
+    if _PERSON_LOOKUP_RE.search(query):
+        return {
+            "direct_answer": PERSON_LOOKUP_REDIRECT_MESSAGE,
+            "completed_agents": state.get("completed_agents", []) + ["chat_responder"],
+            "messages": [AIMessage(content=PERSON_LOOKUP_REDIRECT_MESSAGE)],
         }
 
     # --- 2. Optional web-search grounding via search MCP ----------------

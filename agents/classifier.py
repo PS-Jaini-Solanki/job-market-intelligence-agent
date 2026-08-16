@@ -101,9 +101,18 @@ _THANKS_RE = re.compile(
 _CAPABILITY_RE = re.compile(
     r"\b(what can you do|what do you do|how (can|do) you help|your (features|capabilities|abilities)"
     r"|who are you|what are you|what is your purpose|how (does|do) (this|the|you) work"
-    r"|help me|show me what you can do|what can i ask|capabilit(y|ies))\b",
+    r"|show me what you can do|what can i ask|capabilit(y|ies))\b",
     re.IGNORECASE,
 )
+
+# "help" / "help me" ONLY counts as a capability question when it's the
+# entire message (optionally with trailing punctuation). Previously
+# "help me" was matched as a substring anywhere in the message, so a real
+# request like "help me provide a breakdown of job markets in India" was
+# hijacked into the generic capabilities blurb just because it started
+# with "help me" — even though "help me <do something specific>" is one
+# of the most common ways to phrase an ordinary request.
+_BARE_HELP_RE = re.compile(r"^\s*help( me)?[\s!.?]*$", re.IGNORECASE)
 
 _RESUME_RE = re.compile(
     r"\b(resume|resume analysis|analy[sz]e my resume|review my resume|cv|my skills|my profile"
@@ -417,7 +426,7 @@ def classify_query(
             role=role, country=country, technologies=technologies,
             countries=countries, detail="thanks",
         )
-    if _CAPABILITY_RE.search(q):
+    if _CAPABILITY_RE.search(q) or _BARE_HELP_RE.match(q):
         return ClassificationResult(
             intent=QueryIntent.GENERAL_CHAT, confidence=0.9,
             role=role, country=country, technologies=technologies,

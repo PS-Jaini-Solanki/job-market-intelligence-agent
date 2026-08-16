@@ -96,6 +96,33 @@ def _detect_period(text: str, match_end: int) -> str:
     return "year"
 
 
+# Minimum plausible ANNUAL salary per currency. Job descriptions often
+# contain other dollar/pound/euro figures that aren't compensation at all —
+# referral bonuses ("$250 referral bonus"), hourly contractor rates, per-diem
+# amounts, funding figures, etc. Matching the first "$<number>"-shaped text
+# in a posting without any sanity check let one of these get reported as an
+# actual annual salary (a real observed case: a Backend Engineer posting's
+# "minimum salary" came back as USD 250 — clearly not a real annual wage).
+# A number below this floor is treated the same way the rest of this module
+# treats an unparseable value: skipped rather than reported, since showing a
+# nonsense number undermines the "every figure is real" guarantee just as
+# much as inventing one would.
+_MIN_PLAUSIBLE_ANNUAL_SALARY: dict[str, float] = {
+    "USD": 5_000,
+    "GBP": 4_000,
+    "EUR": 4_500,
+    "INR": 100_000,  # roughly 1 LPA
+}
+_DEFAULT_MIN_PLAUSIBLE_ANNUAL_SALARY = 1_000
+
+
+def _is_plausible_annual(value: float, currency: str, period: str) -> bool:
+    """True if `value` is a plausible ANNUAL salary figure for `currency`."""
+    annualized = value * 12 if period == "month" else value
+    floor = _MIN_PLAUSIBLE_ANNUAL_SALARY.get(currency, _DEFAULT_MIN_PLAUSIBLE_ANNUAL_SALARY)
+    return annualized >= floor
+
+
 def parse_salary_from_text(text: str) -> Optional[SalaryRange]:
     """
     Try to extract a salary range from arbitrary text.
@@ -110,8 +137,10 @@ def parse_salary_from_text(text: str) -> Optional[SalaryRange]:
         return None
 
     for pattern, currency in SALARY_TEXT_PATTERNS:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
+        # Try every match of this pattern (not just the first) — a posting
+        # can contain an unrelated dollar figure (a bonus, an hourly rate)
+        # before the real salary range appears later in the text.
+        for match in re.finditer(pattern, text, re.IGNORECASE):
             try:
                 min_val = float(match.group(1).replace(",", ""))
                 if _has_k_suffix(text, match.end(1)):
@@ -125,11 +154,12 @@ def parse_salary_from_text(text: str) -> Optional[SalaryRange]:
                 else:
                     max_val = min_val
 
+                resolved_currency = currency
                 # Handle LPA conversion (1 LPA = 100,000 INR)
-                if currency == "INR_LPA":
+                if resolved_currency == "INR_LPA":
                     min_val *= 100_000
                     max_val *= 100_000
-                    currency = "INR"
+                    resolved_currency = "INR"
 
                 # A reversed range (e.g. "$150k-$120k") shouldn't silently
                 # report min > max — normalize the order instead of
@@ -139,10 +169,13 @@ def parse_salary_from_text(text: str) -> Optional[SalaryRange]:
 
                 period = _detect_period(text, match.end())
 
+                if not _is_plausible_annual(min_val, resolved_currency, period):
+                    continue
+
                 return SalaryRange(
                     min_value=min_val,
                     max_value=max_val,
-                    currency=currency,
+                    currency=resolved_currency,
                     period=period,
                 )
             except (ValueError, IndexError):
@@ -203,6 +236,16 @@ def compute_salary_statistics(
                 # producing a meaningless blended statistic.
                 if midpoint and sal.period == "month":
                     midpoint *= 12
+                # Sanity-check the value regardless of where it came from.
+                # Adzuna provides salary_min/salary_max as structured API
+                # fields (job_search_tool.py builds SalaryRange directly
+                # from them, bypassing parse_salary_from_text entirely), so
+                # a bad/implausible value from THAT source needs its own
+                # guard here — the parse_salary_from_text floor only
+                # protects the text-parsed fallback path (e.g. Arbeitnow,
+                # which has no structured salary field).
+                if midpoint and not _is_plausible_annual(midpoint, sal.currency, "year"):
+                    continue
                 if midpoint:
                     bucket = salary_values_by_currency.setdefault(sal.currency, [])
                     bucket.append(midpoint)
