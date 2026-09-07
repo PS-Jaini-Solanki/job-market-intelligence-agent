@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from typing import Optional
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -152,7 +152,17 @@ class QueryRepository:
         )
 
     async def get_by_id(self, query_id: str) -> Optional[MarketQueryModel]:
-        """Fetch a query record by ID."""
+        """Fetch a query record by ID.
+
+        A malformed (non-UUID) id is treated as "not found" rather than
+        letting the WHERE clause reach the DB — Postgres raises an
+        invalid-input-syntax DataError for a bad UUID literal, which would
+        otherwise surface as an unhandled 500 instead of a 404.
+        """
+        try:
+            UUID(query_id)
+        except (ValueError, AttributeError, TypeError):
+            return None
         result = await self.session.execute(
             select(MarketQueryModel).where(MarketQueryModel.id == query_id)
         )
@@ -337,7 +347,15 @@ class ResumeRepository:
         return record
 
     async def get_by_id(self, resume_id: str) -> Optional[ResumeModel]:
-        """Fetch a resume by ID."""
+        """Fetch a resume by ID.
+
+        A malformed (non-UUID) id is treated as "not found" — see the same
+        guard in QueryRepository.get_by_id for why.
+        """
+        try:
+            UUID(resume_id)
+        except (ValueError, AttributeError, TypeError):
+            return None
         result = await self.session.execute(
             select(ResumeModel).where(ResumeModel.id == resume_id)
         )

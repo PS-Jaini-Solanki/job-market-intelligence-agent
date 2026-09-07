@@ -151,7 +151,8 @@
     <p style="font-size: 1.4em; color: #e94560; font-weight: bold;">Complete Project Documentation</p>
     <p style="margin-top: 20px;">A Multi-Agent Agentic AI System for Technology Job Market Analysis</p>
     <p style="margin-top: 40px; color: #888;">Prepared for: New Team Members & Interns</p>
-    <p style="color: #888;">Version: 1.0 | Last Updated: July 2026</p>
+    <p style="color: #888;">Version: 1.1 | Last Updated: September 2026</p>
+    <p style="color: #aaa; font-size: 0.9em;">v1.1 update: reflects the query-classifier front door, chat responder, dedicated comparison agent, final-answer step, and the new Jobs MCP server added since v1.0.</p>
     <hr class="separator">
 </div>
 
@@ -202,10 +203,15 @@
     <li>Compare job markets across different countries</li>
     <li>Upload your resume and find skill gaps compared to market demands</li>
     <li>Generate comprehensive, evidence-based market reports</li>
+    <li>Hold a real conversation — greetings, off-topic questions, and natural follow-ups ("what about India?") are handled without re-running the whole pipeline</li>
 </ul>
 
 <div class="callout">
     <strong>Key Principle:</strong> This system guarantees <strong>zero hallucination</strong>. Every statistic in every report comes from real-time job posting data fetched via tools — never from the LLM's memory.
+</div>
+
+<div class="callout callout-success">
+    <strong>What's new in v1.1:</strong> A deterministic <strong>query classifier</strong> now sits in front of the pipeline. Conversational or off-topic messages ("hi", "what's the weather?") get a direct answer from the <strong>ChatResponder</strong> agent and never trigger the full analytical pipeline — fixing the earlier behavior where every message produced the same market report regardless of what was asked.
 </div>
 
 <h3>Example Queries the System Handles</h3>
@@ -216,6 +222,8 @@
     <tr><td>Technology Trends</td><td>"How popular is Rust compared to Go in the job market?"</td></tr>
     <tr><td>Resume Gap Analysis</td><td>"Analyze my resume against market demands" (with file upload)</td></tr>
     <tr><td>General Market Query</td><td>"What skills do I need for a Data Scientist role in India?"</td></tr>
+    <tr><td>Follow-Up (inherited context)</td><td>"What about salaries?" right after asking about India — no need to repeat role/country</td></tr>
+    <tr><td>Conversational / Off-Topic</td><td>"Hi, what can you do?" or "What's the weather in Bangalore?" — answered directly, no report generated</td></tr>
 </table>
 
 <hr class="separator">
@@ -274,18 +282,30 @@
             v                                    |
 +-------------------------------------------------------------------+
 |                  MULTI-AGENT ORCHESTRATION                         |
-|                      (LangGraph StateGraph)                        |
+|                (LangGraph StateGraph — 11 nodes)                   |
 |                                                                    |
+|   +------------+                                                   |
+|   | QUERY      |--- conversational -->  +---------------+          |
+|   | CLASSIFIER |                        | CHAT RESPONDER|--> END   |
+|   +------------+                        +---------------+          |
+|        | analytical                                                |
+|        v                                                          |
 |  +--------+   +--------+   +--------+   +--------+   +----------+ |
 |  |PLANNER |-->| MARKET |-->| SKILL  |-->| TREND  |-->| RESUME   | |
 |  | AGENT  |   |COLLECT |   |EXTRACT |   |ANALYSIS|   | ANALYSIS | |
 |  +--------+   +--------+   +--------+   +--------+   +----------+ |
-|       |                                                 |          |
-|       v                                                 v          |
-|  +--------+   +---------+                               |          |
-|  |RECOMMD |-->| REPORT  |<------------------------------+          |
-|  |  AGENT |   |GENERATOR|                                            |
-|  +--------+   +---------+                                           |
+|                                                            |        |
+|                                                            v        |
+|  +--------+   +--------+   +--------+   +---------+              |
+|  |RECOMMD |<--|COMPARE |<--(if multi-country query)  |             |
+|  | AGENT  |   | AGENT  |                              |             |
+|  +--------+   +--------+                              |             |
+|       |                                                             |
+|       v                                                             |
+|  +--------+   +--------+                                            |
+|  | FINAL  |-->| REPORT |                                            |
+|  |ANSWER  |   |GENERATOR|                                           |
+|  +--------+   +--------+                                            |
 +-------------------------------------------------------------------+
             |          |           |            |
             v          v           v            v
@@ -299,11 +319,11 @@
             |                                    ^
             v                                    |
 +-------------------------------------------------------------------+
-|                   MCP SERVER LAYER                                 |
-|  +----------+ +----------+ +----------+ +----------+             |
-|  | GitHub   | |Filesystem| | Search   | | Reddit  |              |
-|  | MCP      | | MCP      | | MCP      | | MCP     |              |
-|  +----------+ +----------+ +----------+ +----------+             |
+|                MCP SERVER LAYER  (5 servers)                        |
+|  +----------+ +----------+ +----------+ +----------+ +--------+   |
+|  | GitHub   | |Filesystem| | Search   | | Reddit  | | Jobs   |   |
+|  | MCP      | | MCP      | | MCP      | | MCP     | | MCP    |   |
+|  +----------+ +----------+ +----------+ +----------+ +--------+   |
 +-------------------------------------------------------------------+
             |                                    ^
             v                                    |
@@ -331,12 +351,19 @@
 
 <ol>
     <li><strong>Chainlit UI</strong> receives the message, creates initial <code>GraphState</code></li>
+    <li><strong>Query Classifier</strong> deterministically tags the intent as analytical → routes to the Planner (a purely conversational message would route to ChatResponder and stop here)</li>
     <li><strong>Planner Agent</strong> extracts role="Python Developer", country="Germany", creates execution plan</li>
     <li><strong>Market Collection Agent</strong> calls Adzuna API + Arbeitnow API to fetch real job postings</li>
     <li><strong>Skill Extraction Agent</strong> scans job descriptions, counts skill frequencies, computes statistics</li>
-    <li><strong>Report Generation Agent</strong> compiles everything into a structured markdown report</li>
-    <li><strong>Chainlit UI</strong> streams the report back to the user in real-time</li>
+    <li><strong>Recommendation Agent</strong> turns the statistics into prioritized advice</li>
+    <li><strong>Final Answer Agent</strong> writes a concise, question-aligned answer (no LLM — always runs even if Groq is down)</li>
+    <li><strong>Report Generation Agent</strong> compiles everything into a structured markdown report and saves it to <code>reports/</code> via the Filesystem MCP</li>
+    <li><strong>Chainlit UI</strong> streams the direct answer first, then the full report, back to the user in real-time</li>
 </ol>
+
+<div class="callout">
+    <strong>Multi-turn example:</strong> If the user follows up with just <em>"what about salaries?"</em>, the classifier and planner reuse the role and country from <code>conversation_history</code> — no need to repeat "Python Developer in Germany".
+</div>
 
 <hr class="separator">
 
@@ -470,16 +497,20 @@
 <div class="flow-diagram" style="text-align: left;">
 L2_Project/
 |
-|-- agents/                 # Multi-agent system (LangGraph)
+|-- agents/                 # Multi-agent system (LangGraph) — 11 nodes
 |   |-- state.py            # Shared state definition (GraphState TypedDict)
 |   |-- graph.py            # LangGraph StateGraph — wires agents together
+|   |-- classifier.py       # Query Classifier — deterministic intent detection (NEW)
+|   |-- chat_responder.py   # Chat Responder — direct answers for conversational/off-topic (NEW)
 |   |-- planner.py          # Planner Agent — understands query, creates plan
-|   |-- market_collection.py# Market Collection Agent — fetches job postings
+|   |-- market_collection.py# Market Collection Agent — fetches job postings (multi-country aware)
 |   |-- skill_extraction.py # Skill Extraction Agent — counts skills from jobs
 |   |-- trend_analysis.py   # Trend Analysis Agent — GitHub + job market trends
 |   |-- resume_analysis.py  # Resume Analysis Agent — gap analysis
+|   |-- country_comparison.py # Comparison Agent — dedicated multi-country comparison (NEW)
 |   |-- recommendation.py   # Recommendation Agent — actionable advice
-|   +-- report_generation.py# Report Generator — compiles final report
+|   |-- final_answer.py     # Final Answer Agent — concise, question-aligned answer (NEW)
+|   +-- report_generation.py# Report Generator — compiles final report, saves to disk
 |
 |-- api/                    # FastAPI REST endpoints
 |   |-- main.py             # App factory, middleware, lifespan events
@@ -524,12 +555,13 @@ L2_Project/
 |   |-- callbacks.py        # Graph streaming handler
 |   +-- formatters.py       # Tool call + report formatting for UI
 |
-|-- mcp_servers/            # Model Context Protocol servers
+|-- mcp_servers/            # Model Context Protocol servers (5 total)
 |   |-- base.py             # MCPServer abstract base class
 |   |-- github_mcp.py       # GitHub API via MCP
 |   |-- filesystem_mcp.py   # File system operations via MCP
 |   |-- search_mcp.py       # Web search via MCP
 |   |-- reddit_mcp.py       # Reddit integration via MCP
+|   |-- jobs_mcp.py         # Adzuna/Arbeitnow search + country comparison via MCP (NEW)
 |   +-- registry.py         # MCP server registry + auto-routing
 |
 |-- migrations/             # Alembic database migrations
@@ -572,25 +604,34 @@ User types query in Chainlit UI
          |
          v
   [Chainlit on_message handler]
-  - Creates initial GraphState
+  - Creates initial GraphState (carries prior conversation_history)
   - Starts async graph execution
          |
          v
-  [PLANNER AGENT] --- agents/planner.py
-  - Extracts: role, country, query_type
-  - Calls LLM for execution plan
-  - Produces: list of tasks + which agents to run
-  - Routes based on query type:
+  [QUERY CLASSIFIER] --- agents/classifier.py (deterministic, no LLM)
+  - Detects intent: job_market / tech_trend / salary / comparison /
+    resume_analysis / general_chat / out_of_scope
       |
-      +--- If query_type == "skill_analysis" --> Market Collection
-      +--- If query_type == "trend_analysis" --> Market Collection + Trend Analysis
-      +--- If query_type == "resume_analysis"--> Market Collection + Resume Analysis
-      +--- If query_type == "comparison"    --> Market Collection (per country)
+      +--- Conversational/off-topic intent --> CHAT RESPONDER --> END
+      |     (optionally grounds itself with the Search MCP, then stops —
+      |      the analytical pipeline below never runs)
+      |
+      +--- Analytical intent --> continues to Planner
+      v
+  [PLANNER AGENT] --- agents/planner.py
+  - Extracts: role, country/countries, query_type
+  - Inherits role/country from conversation_history for follow-ups
+  - Calls LLM for execution plan (falls back to a default plan if the
+    LLM fails or the plan is empty/invalid — routes to ChatResponder
+    instead of silently crashing)
+  - Produces: list of tasks + which agents to run
       |
       v
   [MARKET COLLECTION AGENT] --- agents/market_collection.py
-  - Calls search_jobs() tool
+  - Calls search_jobs() tool (also exposed as the Jobs MCP's search_jobs)
   - Fetches from Adzuna + Arbeitnow APIs
+  - For multi-country queries: one call per country, results merged,
+    result budget split across markets
   - Returns JobSearchResult with postings
          |
          v
@@ -610,10 +651,22 @@ User types query in Chainlit UI
          |
          v
   [RESUME ANALYSIS AGENT] (conditional) --- agents/resume_analysis.py
+  - Runs only if a resume_path exists AND this turn's intent is
+    actually resume-relevant (a resume uploaded earlier no longer
+    forces a stale gap report onto an unrelated later question)
+  - Reads the file via the Filesystem MCP's read_file tool
   - Parses uploaded resume (PDF/DOCX/TXT)
   - Extracts skills from resume text
   - Compares with top 30 market skills
   - Computes gap_score (0 = perfect match, 100 = major gaps)
+         |
+         v
+  [COMPARISON AGENT] (conditional) --- agents/country_comparison.py
+  - Runs when the plan contains a compare_countries task — checked
+    again after resume_analysis so it's never skipped just because
+    it follows the trend/resume branch and no resume was uploaded
+  - Calls the Jobs MCP's compare_countries tool
+  - Produces posting volume, salary, and top-skills comparison per country
          |
          v
   [RECOMMENDATION AGENT] --- agents/recommendation.py
@@ -622,15 +675,21 @@ User types query in Chainlit UI
   - Falls back to rule-based recommendations if LLM fails
          |
          v
+  [FINAL ANSWER AGENT] --- agents/final_answer.py (rule-based, no LLM)
+  - Reads the full state and writes a concise direct_answer aligned to
+    exactly what was asked — always runs, even if the LLM is down
+         |
+         v
   [REPORT GENERATION AGENT] --- agents/report_generation.py
   - Uses ReportBuilder to compile all sections
   - Generates executive summary via LLM
   - Produces final MarketReport object
+  - Saves the report to disk via the Filesystem MCP's save_report tool
          |
          v
   [Chainlit UI streams report to user]
-  - Shows step-by-step execution
-  - Displays final markdown report
+  - Shows step-by-step execution and each MCP call made
+  - Displays the concise direct answer first, then the full report
 </div>
 
 <h2>6.2 State Management</h2>
@@ -640,18 +699,29 @@ User types query in Chainlit UI
 <table>
     <tr><th>State Field</th><th>Type</th><th>Purpose</th></tr>
     <tr><td><code>user_query</code></td><td>str</td><td>Original user query</td></tr>
-    <tr><td><code>country_filter</code></td><td>Optional[str]</td><td>Target country extracted by planner</td></tr>
+    <tr><td><code>conversation_history</code></td><td>list[dict]</td><td>Prior turns, so follow-ups can inherit role/country</td></tr>
+    <tr><td><code>query_intent</code></td><td>Optional[str]</td><td>Detected by QueryClassifier (analytical vs conversational)</td></tr>
+    <tr><td><code>intent_confidence</code></td><td>Optional[float]</td><td>Classifier confidence (0.0-1.0)</td></tr>
+    <tr><td><code>country_filter</code></td><td>Optional[str]</td><td>Primary target country extracted by planner</td></tr>
+    <tr><td><code>countries</code></td><td>list[str]</td><td>All ISO country codes detected, for comparisons/multi-country search</td></tr>
     <tr><td><code>role</code></td><td>Optional[str]</td><td>Target job role extracted by planner</td></tr>
+    <tr><td><code>role_is_default</code></td><td>Optional[bool]</td><td>True if role was never mentioned and is a fallback guess</td></tr>
     <tr><td><code>resume_path</code></td><td>Optional[str]</td><td>Path to uploaded resume file</td></tr>
-    <tr><td><code>job_search_results</code></td><td>Optional[str]</td><td>Serialized job postings (JSON)</td></tr>
-    <tr><td><code>skill_statistics</code></td><td>Optional[str]</td><td>Serialized skill frequency data</td></tr>
-    <tr><td><code>salary_data</code></td><td>Optional[str]</td><td>Serialized salary statistics</td></tr>
-    <tr><td><code>trend_data</code></td><td>Optional[str]</td><td>Serialized technology trend data</td></tr>
-    <tr><td><code>resume_analysis</code></td><td>Optional[str]</td><td>Serialized resume gap analysis</td></tr>
-    <tr><td><code>recommendations</code></td><td>Optional[str]</td><td>Text recommendations</td></tr>
-    <tr><td><code>final_report</code></td><td>Optional[str]</td><td>Final markdown report</td></tr>
+    <tr><td><code>technologies_to_analyze</code></td><td>list[str]</td><td>Technologies named for trend analysis</td></tr>
+    <tr><td><code>mcp_calls</code></td><td>list[dict]</td><td>Every MCP server/tool call made, for UI traceability</td></tr>
+    <tr><td><code>job_search_results</code></td><td>Optional[dict]</td><td>Serialized job postings</td></tr>
+    <tr><td><code>skill_statistics</code></td><td>Optional[list[dict]]</td><td>Serialized skill frequency data</td></tr>
+    <tr><td><code>salary_data</code></td><td>Optional[dict]</td><td>Serialized salary statistics</td></tr>
+    <tr><td><code>trend_data</code></td><td>Optional[dict]</td><td>Serialized technology trend data</td></tr>
+    <tr><td><code>country_comparison</code></td><td>Optional[dict]</td><td>Cross-country comparison data</td></tr>
+    <tr><td><code>resume_analysis</code></td><td>Optional[dict]</td><td>Serialized resume gap analysis</td></tr>
+    <tr><td><code>recommendations</code></td><td>list[str]</td><td>Recommendations from the Recommendation agent</td></tr>
+    <tr><td><code>direct_answer</code></td><td>Optional[str]</td><td>Concise answer from ChatResponder or FinalAnswer</td></tr>
+    <tr><td><code>final_report</code></td><td>Optional[dict]</td><td>Final markdown report</td></tr>
+    <tr><td><code>completed_agents</code></td><td>list[str]</td><td>Agent names that have finished, for UI progress</td></tr>
     <tr><td><code>messages</code></td><td>List</td><td>Execution log for UI display</td></tr>
     <tr><td><code>errors</code></td><td>List</td><td>Any errors encountered</td></tr>
+    <tr><td><code>should_stop</code></td><td>bool</td><td>True to short-circuit to ChatResponder (e.g. invalid plan)</td></tr>
 </table>
 
 <hr class="separator">
@@ -669,10 +739,34 @@ User types query in Chainlit UI
     <li>The <strong>state</strong> is a shared dictionary that flows between nodes</li>
 </ul>
 
-<h2>7.2 The Seven Agents</h2>
+<h2>7.2 The Eleven Agents</h2>
 
 <div class="no-break">
-<h3>1. Planner Agent <span class="badge badge-blue">Orchestrator</span></h3>
+<h3>1. Query Classifier <span class="badge badge-blue">Front Door</span></h3>
+<p><strong>File:</strong> <span class="file-path">agents/classifier.py</span></p>
+<p><strong>Job:</strong> Deterministically decides whether the message is analytical or conversational, before anything expensive runs.</p>
+<ul>
+    <li>No LLM call — fast, predictable, works even with zero API keys configured</li>
+    <li>Detects intent: <code>job_market</code>, <code>tech_trend</code>, <code>salary</code>, <code>comparison</code>, <code>resume_analysis</code>, <code>general_chat</code>, <code>out_of_scope</code></li>
+    <li>Analytical intents route to the Planner; everything else routes to ChatResponder</li>
+</ul>
+<p><strong>Why:</strong> Without this, every message — including "hi" or a weather question — triggered the full market-analysis pipeline and produced the same report regardless of what was asked. The classifier fixed that.</p>
+</div>
+
+<div class="no-break">
+<h3>2. Chat Responder <span class="badge badge-green">Direct Answer</span></h3>
+<p><strong>File:</strong> <span class="file-path">agents/chat_responder.py</span></p>
+<p><strong>Job:</strong> Answers conversational and off-topic queries directly, without the analytical pipeline.</p>
+<ul>
+    <li>Handles greetings, thank-yous, "what can you do", and genuine off-topic questions</li>
+    <li>Optionally grounds itself with the Search MCP's <code>web_search</code> tool and cites sources</li>
+    <li>Ends the graph immediately — no report is generated</li>
+</ul>
+<p><strong>Why:</strong> Keeps the system honest about what it's for, and avoids wasting LLM/API calls on questions the market-analysis pipeline can't actually answer.</p>
+</div>
+
+<div class="no-break">
+<h3>3. Planner Agent <span class="badge badge-blue">Orchestrator</span></h3>
 <p><strong>File:</strong> <span class="file-path">agents/planner.py</span></p>
 <p><strong>Job:</strong> Understands the user query and creates an execution plan.</p>
 <ul>
@@ -686,19 +780,20 @@ User types query in Chainlit UI
 </div>
 
 <div class="no-break">
-<h3>2. Market Collection Agent <span class="badge badge-green">Data Fetcher</span></h3>
+<h3>4. Market Collection Agent <span class="badge badge-green">Data Fetcher</span></h3>
 <p><strong>File:</strong> <span class="file-path">agents/market_collection.py</span></p>
 <p><strong>Job:</strong> Fetches real job postings from external APIs.</p>
 <ul>
-    <li>Calls <code>search_jobs()</code> tool which hits Adzuna + Arbeitnow APIs</li>
+    <li>Calls <code>search_jobs()</code> tool which hits Adzuna + Arbeitnow APIs (also exposed as the Jobs MCP)</li>
     <li>Splits the maximum results between sources (e.g., 50/50)</li>
+    <li>For multi-country queries, issues one call per country in <code>state["countries"]</code> and merges results, splitting the result budget across markets</li>
     <li>Returns serialized <code>JobSearchResult</code> to state</li>
 </ul>
 <p><strong>Why:</strong> This is where real data enters the system. All subsequent analysis depends on this agent's output.</p>
 </div>
 
 <div class="no-break">
-<h3>3. Skill Extraction Agent <span class="badge badge-purple">Analyzer</span></h3>
+<h3>5. Skill Extraction Agent <span class="badge badge-purple">Analyzer</span></h3>
 <p><strong>File:</strong> <span class="file-path">agents/skill_extraction.py</span></p>
 <p><strong>Job:</strong> Processes raw job postings to extract structured skill and salary data.</p>
 <ul>
@@ -712,7 +807,7 @@ User types query in Chainlit UI
 </div>
 
 <div class="no-break">
-<h3>4. Trend Analysis Agent <span class="badge badge-orange">Trend Tracker</span></h3>
+<h3>6. Trend Analysis Agent <span class="badge badge-orange">Trend Tracker</span></h3>
 <p><strong>File:</strong> <span class="file-path">agents/trend_analysis.py</span></p>
 <p><strong>Job:</strong> Measures technology popularity using GitHub activity + job market data.</p>
 <ul>
@@ -725,10 +820,12 @@ User types query in Chainlit UI
 </div>
 
 <div class="no-break">
-<h3>5. Resume Analysis Agent <span class="badge badge-red">Gap Finder</span></h3>
+<h3>7. Resume Analysis Agent <span class="badge badge-red">Gap Finder</span></h3>
 <p><strong>File:</strong> <span class="file-path">agents/resume_analysis.py</span></p>
 <p><strong>Job:</strong> Compares a user's resume against current market demands.</p>
 <ul>
+    <li>Runs only if a resume was uploaded <em>and</em> this turn's intent is actually resume-relevant — a resume from earlier in the chat no longer forces a stale gap report onto an unrelated question</li>
+    <li>Reads the file via the Filesystem MCP's <code>read_file</code> tool</li>
     <li>Parses uploaded resume (PDF, DOCX, or TXT)</li>
     <li>Extracts skills mentioned in the resume</li>
     <li>Compares against top 30 market skills from Skill Extraction</li>
@@ -739,19 +836,45 @@ User types query in Chainlit UI
 </div>
 
 <div class="no-break">
-<h3>6. Recommendation Agent <span class="badge badge-blue">Advisor</span></h3>
+<h3>8. Comparison Agent <span class="badge badge-orange">Multi-Country</span></h3>
+<p><strong>File:</strong> <span class="file-path">agents/country_comparison.py</span></p>
+<p><strong>Job:</strong> Produces a dedicated side-by-side comparison when the query asks about more than one country.</p>
+<ul>
+    <li>Runs only when the plan contains a <code>compare_countries</code> task</li>
+    <li>Re-checked after both the trend-analysis and resume-analysis branches, so a comparison query is never silently skipped just because no resume was uploaded</li>
+    <li>Calls the Jobs MCP's <code>compare_countries</code> tool</li>
+    <li>Produces posting volume, salary ranges, and shared vs. country-unique skills per market</li>
+</ul>
+<p><strong>Why:</strong> A single-country pipeline can't naturally answer "US vs UK" — this agent is a dedicated step so comparison queries get first-class treatment instead of being bolted onto the market-collection agent.</p>
+</div>
+
+<div class="no-break">
+<h3>9. Recommendation Agent <span class="badge badge-blue">Advisor</span></h3>
 <p><strong>File:</strong> <span class="file-path">agents/recommendation.py</span></p>
 <p><strong>Job:</strong> Generates actionable recommendations based on all analysis results.</p>
 <ul>
     <li>Builds a summary of all analysis data</li>
     <li>Calls the LLM with a specialized recommendation prompt</li>
+    <li>Skips any skill the user already has, so recommendations only show genuine gaps</li>
     <li>Falls back to rule-based recommendations if LLM call fails</li>
 </ul>
 <p><strong>Why:</strong> Raw data needs interpretation. This agent turns statistics into actionable career advice.</p>
 </div>
 
 <div class="no-break">
-<h3>7. Report Generation Agent <span class="badge badge-purple">Compiler</span></h3>
+<h3>10. Final Answer Agent <span class="badge badge-green">Concise Answer</span></h3>
+<p><strong>File:</strong> <span class="file-path">agents/final_answer.py</span></p>
+<p><strong>Job:</strong> Writes the short, question-aligned answer the user actually sees first in chat.</p>
+<ul>
+    <li>Rule-based — no LLM call, so it always runs even if Groq is unavailable</li>
+    <li>Reads the full state and composes a heading plus a few bullet points that answer exactly what was asked</li>
+    <li>Checks intent as well as data presence, so an unrelated follow-up doesn't get a stale resume/comparison answer</li>
+</ul>
+<p><strong>Why:</strong> The full report is thorough but long. Most users want the answer, not a wall of tables — this agent gives them that first, with the full report still available underneath.</p>
+</div>
+
+<div class="no-break">
+<h3>11. Report Generation Agent <span class="badge badge-purple">Compiler</span></h3>
 <p><strong>File:</strong> <span class="file-path">agents/report_generation.py</span></p>
 <p><strong>Job:</strong> Compiles all results into a final, structured market report.</p>
 <ul>
@@ -759,9 +882,9 @@ User types query in Chainlit UI
     <li>Adds skill statistics, salary data, trends, resume analysis, recommendations</li>
     <li>Generates executive summary via LLM</li>
     <li>Always includes data limitations disclaimer</li>
-    <li>Produces a <code>MarketReport</code> with <code>to_markdown()</code> method</li>
+    <li>Produces a <code>MarketReport</code> with <code>to_markdown()</code> method, and saves it to <code>reports/</code> on disk via the Filesystem MCP's <code>save_report</code> tool</li>
 </ul>
-<p><strong>Why:</strong> Provides a consistent, well-formatted output regardless of which agents ran.</p>
+<p><strong>Why:</strong> Provides a consistent, well-formatted output regardless of which agents ran, and keeps a durable record separate from the concise in-chat answer.</p>
 </div>
 
 <h2>7.3 Conditional Routing Logic</h2>
@@ -770,11 +893,14 @@ User types query in Chainlit UI
 
 <table>
     <tr><th>Condition</th><th>Function</th><th>Routes To</th></tr>
-    <tr><td>Always (after planner)</td><td>-</td><td>Market Collection</td></tr>
-    <tr><td>After Market Collection</td><td><code>should_analyze_trends()</code></td><td>Trend Analysis (if technologies specified) OR skip</td></tr>
-    <tr><td>After Skill Extraction</td><td><code>should_analyze_resume()</code></td><td>Resume Analysis (if resume uploaded) OR skip</td></tr>
-    <tr><td>Any agent error</td><td><code>should_stop_on_error()</code></td><td>Report Generation (graceful degradation)</td></tr>
-    <tr><td>After all agents</td><td>-</td><td>Report Generation</td></tr>
+    <tr><td>After Query Classifier</td><td><code>route_after_classifier()</code></td><td>Planner (analytical) OR Chat Responder (conversational) — then straight to END</td></tr>
+    <tr><td>After Planner</td><td><code>route_after_planner()</code></td><td>Market Collection, OR Chat Responder if the plan is invalid/empty (<code>should_stop</code>)</td></tr>
+    <tr><td>After Skill Extraction</td><td><code>should_analyze_trends()</code></td><td>Trend Analysis (if an <code>analyze_trends</code> task or technologies are present) OR Resume Analysis</td></tr>
+    <tr><td>After Trend Analysis</td><td><code>should_analyze_resume()</code></td><td>Resume Analysis (if resume uploaded AND intent is resume-relevant), OR Comparison Agent (if a comparison task is pending), OR Recommendation</td></tr>
+    <tr><td>After Resume Analysis</td><td><code>should_run_country_comparison()</code></td><td>Comparison Agent (if a <code>compare_countries</code> task is in the plan) OR Recommendation</td></tr>
+    <tr><td>After Comparison Agent</td><td>-</td><td>Recommendation (always)</td></tr>
+    <tr><td>After Recommendation</td><td>-</td><td>Final Answer → Report Generation (always)</td></tr>
+    <tr><td>After Report Generation</td><td>-</td><td>END</td></tr>
 </table>
 
 <hr class="separator">
@@ -791,7 +917,7 @@ User types query in Chainlit UI
     <strong>Analogy:</strong> Before USB, every device had a different port. Before MCP, every AI tool had a different calling convention. MCP standardizes tool interfaces so agents don't need to know the implementation details.
 </div>
 
-<h2>8.2 Our Four MCP Servers</h2>
+<h2>8.2 Our Five MCP Servers</h2>
 
 <h3>1. GitHub MCP Server <span class="badge badge-blue">github_mcp.py</span></h3>
 <p>Provides 3 tools for GitHub data:</p>
@@ -824,13 +950,21 @@ User types query in Chainlit UI
     <li><code>search_posts</code> — Searches tech subreddits (r/programming, r/python, r/javascript, etc.)</li>
     <li><code>get_tech_sentiment</code> — Analyzes community sentiment about technologies</li>
 </ul>
-<p><strong>Note:</strong> Gracefully handles missing Reddit credentials — the system works without it.</p>
+<p><strong>Note:</strong> Gracefully handles missing Reddit credentials — the system works without it. Currently registered but not hardwired to any agent — available for the LLM Planner to opt into via a task's <code>required_mcp_servers</code>.</p>
+
+<h3>5. Jobs MCP Server <span class="badge badge-green">jobs_mcp.py</span> <span class="badge badge-blue">NEW</span></h3>
+<p>Provides 2 tools for live job market data (wraps the same Adzuna + Arbeitnow integration used by <code>tools/job_search_tool.py</code>):</p>
+<ul>
+    <li><code>search_jobs</code> — Collects live postings for a role/country</li>
+    <li><code>compare_countries</code> — Compares a role's job market across multiple countries (volume, salaries, top skills)</li>
+</ul>
+<p><strong>Used by:</strong> Market Collection Agent (<code>search_jobs</code>) and the dedicated Comparison Agent (<code>compare_countries</code>).</p>
 
 <h2>8.3 MCP Registry</h2>
 <p><strong>File:</strong> <span class="file-path">mcp_servers/registry.py</span></p>
 <p>The <code>MCPRegistry</code> is a singleton that:</p>
 <ul>
-    <li>Initializes all 4 MCP servers at startup</li>
+    <li>Initializes all 5 MCP servers at startup (<code>github</code>, <code>search</code>, <code>filesystem</code>, <code>reddit</code>, <code>jobs</code>)</li>
     <li>Provides tool discovery (<code>get_all_tool_names()</code>)</li>
     <li>Routes tool calls to the correct server (<code>call_tool_auto_route()</code>)</li>
     <li>Handles errors gracefully</li>
@@ -1150,7 +1284,7 @@ Where:
 <table>
     <tr><th>Model</th><th>Key Feature</th></tr>
     <tr><td>TaskType</td><td>Enum with 8 task types (SKILL_ANALYSIS, MARKET_RESEARCH, etc.)</td></tr>
-    <tr><td>MCPServerType</td><td>Enum for 4 MCP servers (GITHUB, FILESYSTEM, SEARCH, REDDIT)</td></tr>
+    <tr><td>MCPServerType</td><td>Enum for 5 MCP servers (GITHUB, FILESYSTEM, SEARCH, REDDIT, JOBS)</td></tr>
     <tr><td>AgentTask</td><td>Single task with dependencies, status, and assigned MCP servers</td></tr>
     <tr><td>PlannerOutput</td><td>Validated output from Planner Agent (tasks + reasoning + query_type)</td></tr>
     <tr><td>MarketReport</td><td>Full report with <code>to_markdown()</code> method for rendering</td></tr>
@@ -1244,7 +1378,10 @@ REDDIT_CLIENT_ID=xxxxx          # reddit.com/prefs/apps
 REDDIT_CLIENT_SECRET=xxxxx
 
 # Database (use Docker):
-DATABASE_URL=postgresql+asyncpg://jobmarket:jobmarket123@localhost:5432/jobmarket_intelligence</code></pre>
+# NOTE: the setting is SQLALCHEMY_DATABASE_URL, not DATABASE_URL — using
+# the wrong name means this is silently ignored and the config.py default
+# connection string is used instead.
+SQLALCHEMY_DATABASE_URL=postgresql+asyncpg://job_market_user:changeme@localhost:5432/job_market_db</code></pre>
 
 <h3>Step 5: Start PostgreSQL</h3>
 <pre><code>docker compose up -d postgres</code></pre>
@@ -1371,6 +1508,15 @@ docker compose down</code></pre>
 <p>Upload a resume via Chainlit (use the attachment button) and type:</p>
 <pre><code>Analyze my resume against current market demands</code></pre>
 
+<h2>17.5 Demo Script (Shows Every Agent)</h2>
+<p>A good live-demo order, since it exercises the classifier, every conditional branch, and follow-up context inheritance in one sitting:</p>
+<ol>
+    <li><code>What's the weather in Bangalore?</code> — shows the classifier routing straight to ChatResponder, with a Search MCP call visible and no report generated</li>
+    <li><code>What skills are required for AI Engineers in India?</code> — shows the full analytical pipeline: Planner → Market Collection (Jobs MCP) → Skill Extraction → Recommendation → Final Answer → Report</li>
+    <li><code>What about salaries?</code> — a bare follow-up; the classifier/planner inherit role="AI Engineer" and country="India" from <code>conversation_history</code>, no re-typing needed</li>
+    <li><code>Compare AI Engineer job markets in India vs USA</code> — routes to the dedicated Comparison Agent (Jobs MCP <code>compare_countries</code>)</li>
+</ol>
+
 <hr class="separator">
 
 <!-- ============================================== -->
@@ -1409,6 +1555,11 @@ pytest tests/integration/ -v</code></pre>
     <tr><td><code>test_resume_parser.py</code></td><td>Experience estimation: "5+ years of experience", "3 years in machine learning", etc.</td></tr>
     <tr><td><code>test_planner_routing.py</code></td><td>Query parsing: role extraction ("Python developer"), country extraction ("in Germany")</td></tr>
     <tr><td><code>test_mcp_communication.py</code></td><td>MCP server initialization, tool discovery, tool calling</td></tr>
+    <tr><td><code>test_graph_routing.py</code></td><td>Conditional edge functions in <code>agents/graph.py</code> — classifier routing, trend/resume/comparison branching</td></tr>
+    <tr><td><code>test_chat_responder.py</code></td><td>ChatResponder direct answers for conversational/off-topic intents, with and without Search MCP grounding</td></tr>
+    <tr><td><code>test_final_answer.py</code></td><td>FinalAnswer's rule-based, intent-aware answer composition from partial/missing state</td></tr>
+    <tr><td><code>test_report_generation.py</code></td><td>Report building and disk save when several state sections are missing</td></tr>
+    <tr><td><code>test_full_scenarios.py</code> <span class="file-path">(e2e)</span></td><td>Full end-to-end scenarios: state creation through to final report</td></tr>
 </table>
 
 <hr class="separator">
@@ -1423,7 +1574,7 @@ pytest tests/integration/ -v</code></pre>
 <ul>
     <li>Uses <code>pydantic-settings</code> for type-safe environment variable management</li>
     <li>All settings are loaded from <code>.env</code> file</li>
-    <li>Computed properties: <code>has_groq</code>, <code>has_github</code>, <code>has_tavily</code>, etc.</li>
+    <li>Computed properties: <code>has_github</code>, <code>has_tavily</code>, <code>has_adzuna</code>, <code>has_reddit</code> (also treats the placeholder values shipped in <code>.env.example</code> as "not configured", so an unfilled Reddit key never causes a confusing auth failure), and <code>database_url_masked</code> for safe logging</li>
     <li>Cached via <code>@lru_cache</code> so <code>.env</code> is only read once</li>
 </ul>
 
@@ -1436,11 +1587,9 @@ pytest tests/integration/ -v</code></pre>
     <tr><td><code>TAVILY_API_KEY</code></td><td>Yes</td><td>-</td><td>Web search API</td></tr>
     <tr><td><code>ADZUNA_APP_ID</code></td><td>No</td><td>-</td><td>Job search API (more results)</td></tr>
     <tr><td><code>ADZUNA_APP_KEY</code></td><td>No</td><td>-</td><td>Job search API</td></tr>
-    <tr><td><code>REDDIT_CLIENT_ID</code></td><td>No</td><td>-</td><td>Reddit integration (optional)</td></tr>
-    <tr><td><code>DATABASE_URL</code></td><td>Yes</td><td>-</td><td>PostgreSQL connection string</td></tr>
-    <tr><td><code>APP_ENV</code></td><td>No</td><td>development</td><td>Environment mode</td></tr>
-    <tr><td><code>LOG_LEVEL</code></td><td>No</td><td>INFO</td><td>Logging verbosity</td></tr>
-    <tr><td><code>MAX_UPLOAD_SIZE_MB</code></td><td>No</td><td>10</td><td>Max resume file size</td></tr>
+    <tr><td><code>REDDIT_CLIENT_ID</code> / <code>REDDIT_CLIENT_SECRET</code></td><td>No</td><td>-</td><td>Reddit integration (optional)</td></tr>
+    <tr><td><code>SQLALCHEMY_DATABASE_URL</code></td><td>Yes</td><td><code>postgresql+asyncpg://job_market_user:changeme@localhost:5432/job_market_db</code></td><td>PostgreSQL connection string — <strong>not</strong> <code>DATABASE_URL</code>, a common mix-up (see <code>.env.example</code>)</td></tr>
+    <tr><td><code>MAX_RESUME_SIZE_MB</code></td><td>No</td><td>10</td><td>Max resume file size, enforced on upload</td></tr>
 </table>
 
 <hr class="separator">
@@ -1486,6 +1635,18 @@ pytest tests/integration/ -v</code></pre>
 <h3>Q: Skills not found in job postings</h3>
 <p><strong>Cause:</strong> Too few job postings returned (need minimum data for statistics).</p>
 <p><strong>Fix:</strong> Try broader queries (e.g., "Python developer" instead of "Senior ML Engineer specializing in PyTorch at startup").</p>
+</div>
+
+<div class="no-break">
+<h3>Q: I set DATABASE_URL in .env but the app still connects to the default database</h3>
+<p><strong>Cause:</strong> <code>config.py</code>'s field is named <code>SQLALCHEMY_DATABASE_URL</code>, not <code>DATABASE_URL</code>. Because <code>extra="ignore"</code> is set, a wrongly-named variable is silently dropped instead of erroring.</p>
+<p><strong>Fix:</strong> Use <code>SQLALCHEMY_DATABASE_URL=...</code> in your <code>.env</code> (see the corrected <span class="file-path">.env.example</span>).</p>
+</div>
+
+<div class="no-break">
+<h3>Q: Why does GET /api/query/{id} return 404 instead of an error for a bad id?</h3>
+<p><strong>Cause:</strong> Query and resume ids are UUIDs. Passing a malformed string used to raise an unhandled database error, which the global exception handler turned into a confusing 500.</p>
+<p><strong>Fix:</strong> Already handled — <span class="file-path">database/repositories.py</span> validates the id with <code>uuid.UUID(...)</code> before querying and returns a clean "not found" for anything malformed.</p>
 </div>
 
 <div class="no-break">
@@ -1535,6 +1696,8 @@ pytest tests/integration/ -v</code></pre>
     <tr><td><strong>Llama 3.3 70B</strong></td><td>Meta's open-source 70-billion parameter language model, hosted on Groq for fast inference.</td></tr>
     <tr><td><strong>Popularity Score</strong></td><td>Our custom 0-100 metric combining GitHub activity (50%) and job market demand (50%).</td></tr>
     <tr><td><strong>Gap Score</strong></td><td>0-100 metric measuring how well a resume matches market demands (0 = perfect match).</td></tr>
+    <tr><td><strong>Query Classifier</strong></td><td>The deterministic (no-LLM) first node in the graph that decides analytical vs. conversational intent.</td></tr>
+    <tr><td><strong>Direct Answer</strong></td><td>The concise, question-aligned answer shown first in chat — written by ChatResponder or FinalAnswer, as opposed to the full markdown report.</td></tr>
     <tr><td><strong>Evidence String</strong></td><td>A human-readable string like "Python: 45 of 100 postings (45%)" — used in reports for traceability.</td></tr>
 </table>
 
