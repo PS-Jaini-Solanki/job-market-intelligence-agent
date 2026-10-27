@@ -24,6 +24,11 @@ import logging
 from langchain_core.messages import AIMessage
 
 from agents.state import GraphState
+from tools.job_search_tool import (
+    COUNTRY_NAMES,
+    DEFAULT_ADZUNA_COUNTRY,
+    country_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +56,62 @@ def _skill_names(items: list[dict]) -> list[str]:
 
 
 def _sources(state: GraphState) -> list[str]:
-    """Collect the data sources recorded in state."""
+    """The data sources that actually returned postings this turn."""
+    collected = (state.get("job_search_results") or {}).get("sources_queried") or []
+    if collected:
+        return list(collected)
     sources: set[str] = set()
     for stat in state.get("skill_statistics") or []:
-        for s in stat.get("sources", []):
-            sources.add(s)
-    return sorted(sources) or ["adzuna", "arbeitnow"]
+        sources.update(stat.get("sources", []))
+    return sorted(sources)
+
+
+def _sources_text(sources: list[str]) -> str:
+    return ", ".join(sources) or "no source"
+
+
+def _location_phrase(state: GraphState) -> str:
+    """
+    Where the analyzed postings are from, e.g. " in **India**".
+
+    With no country named, the postings' own countries are reported (the
+    default board plus any Arbeitnow matches), never "globally".
+    """
+    country = state.get("country_filter")
+    if country:
+        return f" in **{country_name(country)}**"
+    postings = (state.get("job_search_results") or {}).get("postings") or []
+    counts: dict[str, int] = {}
+    for posting in postings:
+        label = country_name(posting.get("country")) or "location not stated"
+        counts[label] = counts.get(label, 0) + 1
+    if not counts:
+        return ""
+    ordered = sorted(counts.items(), key=lambda kv: -kv[1])
+    return " in " + " and ".join(f"**{label}** ({n})" for label, n in ordered)
+
+
+def _context_notes(state: GraphState) -> str:
+    """
+    Trailing notes about what the answer assumed or left out: a country the
+    sources can't cover, or no country named at all.
+    """
+    notes: list[str] = []
+    unsupported = state.get("unsupported_countries") or []
+    if unsupported:
+        one = len(unsupported) == 1
+        notes.append(
+            f"{', '.join(unsupported)} {'is' if one else 'are'} not covered by my live job "
+            f"sources (covered: {', '.join(COUNTRY_NAMES.values())}), so "
+            f"{'it is' if one else 'they are'} left out."
+        )
+    if not state.get("country_filter") and not state.get("countries"):
+        notes.append(
+            f"You didn't name a country, so this uses the default "
+            f"{country_name(DEFAULT_ADZUNA_COUNTRY)} market. Name a country (e.g. India, UK, "
+            "Germany) for local results."
+        )
+    return "".join(f"\n\n_{n}_" for n in notes)
 
 
 def _role_default_disclaimer(state: GraphState) -> str:
@@ -91,14 +146,16 @@ def _compose_resume_answer(state: GraphState) -> str:
 
     fit = analysis.get("gap_score")
     total = analysis.get("total_postings_analyzed") or 0
-    query_ctx = analysis.get("query_context") or f"{role} in {country or 'global market'}"
-    sources = ", ".join(analysis.get("sources") or ["adzuna", "arbeitnow"])
+    query_ctx = analysis.get("query_context") or (
+        f"{role} roles in {country_name(country) or 'all markets searched'}"
+    )
+    sources = _sources_text(analysis.get("sources") or _sources(state))
 
     matching = _skill_names(analysis.get("matching_skills"))
     missing = analysis.get("missing_skills") or []
 
     lines = [
-        f"**Your skills vs. the {query_ctx}**",
+        f"**Your resume vs. {query_ctx}**",
         "",
         f"**Market Fit Score: {fit:.1f}/100** "
         f"(based on {total} job postings from {sources}).",
@@ -134,6 +191,45 @@ def _compose_resume_answer(state: GraphState) -> str:
         lines.extend(f"- {rec}" for rec in recommendations[:3])
 
     lines.append("\n*Answers are based on live job postings only.*")
+    return "\n".join(lines) + _resume_role_note(state)
+
+
+def _resume_role_note(state: GraphState) -> str:
+    """Ask for the target role when the comparison used a default one."""
+    if not state.get("role_is_default"):
+        return ""
+    return (
+        "\n\n_You didn't say which role you're targeting, so I compared your resume "
+        f"against **{state.get('role')}** postings. Tell me the role (e.g. \"Data "
+        "Scientist in India\") for a precise comparison._"
+    )
+
+
+def _compose_resume_no_skills_answer(state: GraphState) -> str:
+    """A resume was read but contains no technical skill we recognize."""
+    resume_data = state.get("resume_data") or {}
+    name = resume_data.get("file_name") or "your resume"
+    return (
+        f"I read **{name}**, but I couldn't find any technical skills I recognize in it "
+        "(languages, frameworks, cloud, databases, tools), so I can't score it against "
+        "the market. If it's a technical resume, make sure the skills are written out as "
+        "text (not inside images) and try again."
+    )
+
+
+def _resume_fit_footer(state: GraphState) -> str:
+    """Short personal-fit addendum for a job-market answer when a resume is on file."""
+    analysis = state.get("resume_analysis") or {}
+    if not analysis:
+        return ""
+    missing = [g["skill"]["normalized_name"] for g in (analysis.get("missing_skills") or [])[:5]]
+    lines = [
+        "",
+        f"📄 **Your resume:** Market Fit Score **{analysis.get('gap_score', 0):.1f}/100** "
+        "against these postings.",
+    ]
+    if missing:
+        lines.append(f"Top gaps to close: {', '.join(missing)}.")
     return "\n".join(lines)
 
 
@@ -150,7 +246,7 @@ def _compose_resume_no_market_data_answer(state: GraphState) -> str:
     resume_data = state.get("resume_data") or {}
     role = state.get("role") or "this role"
     country = state.get("country_filter")
-    location = f" in {country}" if country else ""
+    location = f" in {country_name(country)}" if country else ""
     skills = resume_data.get("extracted_skills") or []
     skill_names = [
         s.get("normalized_name") for s in skills if isinstance(s, dict) and s.get("normalized_name")
@@ -198,19 +294,19 @@ def _compose_job_market_answer(state: GraphState) -> str:
     recommendations = state.get("recommendations") or []
 
     if not skill_stats:
+        where = f" in {country_name(country)}" if country else ""
         return (
-            f"I couldn't find enough live postings for **{role}** "
-            f"{'in ' + country if country else 'in the global market'} right now. "
-            "Please try again in a moment." + _role_default_disclaimer(state)
+            f"I couldn't find enough live postings for **{role}**{where} right now "
+            "to analyze. Try a broader role name, another country, or again in a moment."
+            + _role_default_disclaimer(state) + _context_notes(state)
         )
 
     total = skill_stats[0].get("total_postings", 0)
-    location = f" in **{country}**" if country else " globally"
     lines = [
-        f"## Top in-demand skills for **{role}**{location}",
+        f"## Top in-demand skills for **{role}**{_location_phrase(state)}",
         "",
         f"Based on **{total} live job postings** "
-        f"({', '.join(_sources(state))}):",
+        f"({_sources_text(_sources(state))}):",
         "",
     ]
     for stat in skill_stats[:8]:
@@ -226,7 +322,10 @@ def _compose_job_market_answer(state: GraphState) -> str:
     lines.extend(
         ["", "*Percentages are of the analyzed postings only — not the whole market.*"]
     )
-    return "\n".join(lines) + _role_default_disclaimer(state)
+    return (
+        "\n".join(lines) + _resume_fit_footer(state)
+        + _role_default_disclaimer(state) + _context_notes(state)
+    )
 
 
 def _compose_salary_answer(state: GraphState) -> str:
@@ -234,14 +333,15 @@ def _compose_salary_answer(state: GraphState) -> str:
     salary = state.get("salary_data") or {}
     role = state.get("role") or "this role"
     country = state.get("country_filter")
-    location = f" in {country}" if country else ""
+    location = f" in {country_name(country)}" if country else ""
     sample = salary.get("sample_count", 0)
+    postings = len((state.get("job_search_results") or {}).get("postings") or [])
 
     if sample < 1:
         return (
-            f"Not enough salary data for **{role}**{location} right now — "
-            "fewer than a handful of live postings disclosed compensation."
-            + _role_default_disclaimer(state)
+            f"Not enough salary data for **{role}**{location} right now — none of the "
+            f"{postings} live postings analyzed disclosed a salary range."
+            + _role_default_disclaimer(state) + _context_notes(state)
         )
 
     currency = salary.get("currency", "USD")
@@ -263,10 +363,11 @@ def _compose_salary_answer(state: GraphState) -> str:
             f"{_fmt_money(salary.get('max_salary'), currency)}"
         )
 
+    of_total = f" of {postings}" if postings else ""
     lines.extend(
-        ["", "*Only a fraction of postings list salaries — treat as indicative.*"]
+        ["", f"*{sample}{of_total} postings listed a salary — treat as indicative.*"]
     )
-    return "\n".join(lines) + _role_default_disclaimer(state)
+    return "\n".join(lines) + _role_default_disclaimer(state) + _context_notes(state)
 
 
 def _compose_trend_answer(state: GraphState) -> str:
@@ -281,8 +382,8 @@ def _compose_trend_answer(state: GraphState) -> str:
 
     if not trends:
         return (
-            f"I couldn't gather trend data for the technologies you asked about. "
-            "Try naming technologies explicitly (e.g. 'LangGraph', 'MCP')."
+            "I couldn't gather trend data right now (no GitHub data and no matching "
+            "postings). Try naming technologies explicitly, e.g. 'LangGraph vs CrewAI'."
         )
 
     lines = [
@@ -300,7 +401,10 @@ def _compose_trend_answer(state: GraphState) -> str:
             f"- **{tech}** — score {score:.1f} "
             f"(job demand {job_pct:.1f}%)"
         )
-    return "\n".join(lines)
+    if not state.get("technologies_to_analyze"):
+        lines.extend(["", "_You didn't name technologies, so these are the top skills "
+                          "found in the analyzed postings._"])
+    return "\n".join(lines) + _context_notes(state)
 
 
 def _compose_comparison_answer(state: GraphState) -> str:
@@ -309,10 +413,8 @@ def _compose_comparison_answer(state: GraphState) -> str:
     role = state.get("role") or "Software Engineer"
 
     if not comparison or "error" in comparison:
-        return (
-            f"I couldn't complete the comparison for **{role}** "
-            "— live job data for the requested countries wasn't available."
-        )
+        reason = (comparison or {}).get("error") or "live job data wasn't available"
+        return f"I couldn't complete the comparison for **{role}**: {reason}" + _context_notes(state)
 
     countries = comparison.get("countries", {})
     if not countries:
@@ -321,7 +423,7 @@ def _compose_comparison_answer(state: GraphState) -> str:
     lines = [
         f"## {role} job market comparison",
         "",
-        f"| Metric | {' | '.join(countries)} |",
+        f"| Metric | {' | '.join(country_name(c) for c in countries)} |",
         "|--------|" + "------|" * len(countries),
     ]
 
@@ -353,7 +455,7 @@ def _compose_comparison_answer(state: GraphState) -> str:
     lines.extend(
         ["", "*Country coverage reflects our job sources, not true market size.*"]
     )
-    return "\n".join(lines)
+    return "\n".join(lines) + _context_notes(state)
 
 
 # ============================================================
@@ -374,39 +476,19 @@ def compose_final_answer(state: GraphState) -> str:
         A short Markdown answer string.
     """
     intent = state.get("query_intent") or "job_market"
-    has_resume_analysis = bool(state.get("resume_analysis"))
-    has_resume_data = bool(state.get("resume_data"))
+    resume_data = state.get("resume_data") or {}
 
-    # Resume-fit questions take priority whenever resume analysis ran —
-    # but ONLY for intents where the resume is actually the point of the
-    # question. A resume uploaded earlier in the conversation stays in
-    # session state for the rest of the chat (so follow-ups don't need
-    # a re-upload), and `should_analyze_resume` in agents/graph.py can
-    # still run resume_analysis on later turns. Without this intent
-    # restriction, asking a completely unrelated question later — e.g.
-    # "what's the average salary for a Backend Engineer in Germany?"
-    # (intent=salary) — would silently return a stale resume-fit report
-    # instead of answering the salary question at all. `job_market` is
-    # kept because "here's my resume, what skills do I need for X role"
-    # is a legitimate combined question; salary/tech_trend/comparison
-    # intents are not resume questions and must always get their own
-    # answer.
-    if has_resume_analysis and intent in ("resume_analysis", "job_market"):
-        return _compose_resume_answer(state)
-    # Resume was uploaded and parsed, but there was no market data to compare
-    # it against — acknowledge the resume instead of giving a generic
-    # job-market "no postings" message that never mentions it.
-    if intent == "resume_analysis" and has_resume_data and not has_resume_analysis:
+    # Resume-fit questions. A resume uploaded earlier stays on file for the
+    # whole conversation, so it only shapes the answer when this turn is
+    # actually about it; other intents always get their own answer.
+    if intent == "resume_analysis":
+        if state.get("resume_analysis"):
+            return _compose_resume_answer(state)
+        if not resume_data:
+            return _compose_resume_missing_answer(state)
+        if not resume_data.get("extracted_skills"):
+            return _compose_resume_no_skills_answer(state)
         return _compose_resume_no_market_data_answer(state)
-    # The user asked a resume question but no resume was ever actually
-    # attached to this conversation (resume_data is only set once a file
-    # is successfully parsed). Without this branch, this fell all the way
-    # through to the generic job-market composer, which silently answered
-    # with whatever role/country happened to be in state — producing an
-    # answer that looked plausible but had nothing to do with the resume
-    # request and never told the user a file was missing.
-    if intent == "resume_analysis" and not has_resume_data:
-        return _compose_resume_missing_answer(state)
     if intent == "salary":
         return _compose_salary_answer(state)
     if intent == "tech_trend":
@@ -414,6 +496,7 @@ def compose_final_answer(state: GraphState) -> str:
     if intent == "country_comparison":
         return _compose_comparison_answer(state)
 
+    # job_market: answer the question; a resume on file adds a personal-fit line.
     return _compose_job_market_answer(state)
 
 

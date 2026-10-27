@@ -10,7 +10,8 @@ GET  /api/resume/{id}/analysis — Get gap analysis for a resume
 from __future__ import annotations
 
 import logging
-import os
+import re
+import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -20,11 +21,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import get_settings
 from database.connection import get_session
 from database.repositories import ResumeRepository
+from tools.resume_parser_tool import (
+    SUPPORTED_RESUME_EXTENSIONS,
+    estimate_experience_years,
+    validate_resume_file,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
 
 
 class ResumeUploadResponse(BaseModel):
@@ -72,51 +76,41 @@ async def upload_resume(
         ResumeUploadResponse with the resume ID and extracted skill count.
     """
     settings = get_settings()
+    display_name = file.filename or "resume"
 
-    # Validate file extension
-    suffix = Path(file.filename or "").suffix.lower()
-    if suffix not in ALLOWED_EXTENSIONS:
+    # Cheap checks before reading the whole body
+    suffix = Path(display_name).suffix.lower()
+    if suffix not in SUPPORTED_RESUME_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=f"Unsupported file type: {suffix}. Allowed: {ALLOWED_EXTENSIONS}",
+            detail=f"Unsupported file type: {suffix or 'none'}. "
+                   f"Allowed: {', '.join(sorted(SUPPORTED_RESUME_EXTENSIONS))}",
         )
-
-    # Validate file size
     content = await file.read()
-    max_bytes = settings.MAX_RESUME_SIZE_MB * 1024 * 1024
-    if len(content) > max_bytes:
+    if len(content) > settings.MAX_RESUME_SIZE_MB * 1024 * 1024:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"File too large. Maximum size: {settings.MAX_RESUME_SIZE_MB}MB",
         )
 
-    # Save file to disk
+    # Unique on-disk name so two "resume.pdf" uploads never overwrite each other
     upload_dir = Path(settings.RESUME_UPLOAD_DIR)
     upload_dir.mkdir(parents=True, exist_ok=True)
-
-    # Use original filename but sanitize it
-    import re
-    safe_name = re.sub(r"[^\w\-.]", "_", file.filename or "resume")
-    file_path = upload_dir / safe_name
-
+    safe_name = re.sub(r"[^\w\-.]", "_", display_name)
+    file_path = upload_dir / f"{uuid.uuid4()}_{safe_name}"
     file_path.write_bytes(content)
-    logger.info("Resume file saved", extra={"path": str(file_path)})
 
-    # Parse the resume
-    try:
-        from tools.resume_parser_tool import extract_text_from_file, estimate_experience_years
-        from tools.skill_extractor_tool import extract_skills_from_text
-
-        raw_text = extract_text_from_file(file_path)
-        skill_names = extract_skills_from_text(raw_text)
-        experience_years = estimate_experience_years(raw_text)
-
-    except Exception as e:
-        logger.error("Resume parsing failed", extra={"error": str(e)})
+    # Same validation as the chat UI: readable text with resume structure
+    check = validate_resume_file(file_path, display_name=display_name)
+    if not check.ok:
+        file_path.unlink(missing_ok=True)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Could not parse resume: {str(e)}",
+            detail=check.reason.replace("**", ""),
         )
+    raw_text, skill_names = check.text, check.skills
+    experience_years = estimate_experience_years(raw_text)
+    logger.info("Resume file saved", extra={"path": str(file_path)})
 
     # Save to database
     resume_repo = ResumeRepository(session)

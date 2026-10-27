@@ -20,17 +20,29 @@ HOW TO USE:
 from __future__ import annotations
 
 import logging
+import math
+import re
 from datetime import datetime
 from typing import Optional
 
 import httpx
 from langchain_core.tools import tool
-from tenacity import retry, stop_after_attempt, wait_exponential
 
 from config import get_settings
 from models.job import JobPosting, JobSearchResult, SalaryRange
 
 logger = logging.getLogger(__name__)
+
+# Adzuna needs a country board; this one is used when the user names none.
+DEFAULT_ADZUNA_COUNTRY = "US"
+
+# Arbeitnow ignores its `search` parameter (it returns the same feed for any
+# query), so we scan its newest pages and filter by title locally.
+# ponytail: bounded scan of the newest pages; raise if recall is too low.
+ARBEITNOW_MAX_PAGES = 3
+
+# Title words treated as interchangeable when matching a role to a posting.
+_ROLE_SUFFIX_EQUIVALENTS = {"engineer", "developer", "programmer"}
 
 # Country code mapping for Adzuna API
 # Adzuna uses different URL paths for different countries
@@ -60,6 +72,45 @@ ADZUNA_COUNTRY_CURRENCIES: dict[str, str] = {
     "AE": "AED",   # UAE — Dirham
 }
 
+# Every country the job sources can serve, and how to show it to a user.
+COUNTRY_NAMES: dict[str, str] = {
+    "IN": "India",
+    "US": "United States",
+    "GB": "United Kingdom",
+    "AU": "Australia",
+    "CA": "Canada",
+    "DE": "Germany",
+    "FR": "France",
+    "SG": "Singapore",
+    "AE": "United Arab Emirates",
+}
+SUPPORTED_COUNTRIES: frozenset[str] = frozenset(ADZUNA_COUNTRY_PATHS)
+
+
+def country_name(code: Optional[str]) -> str:
+    """Human-readable name for an ISO code ('IN' -> 'India')."""
+    if not code:
+        return ""
+    return COUNTRY_NAMES.get(code.upper(), code.upper())
+
+
+def is_relevant_title(title: str, role: str) -> bool:
+    """
+    True if a posting title is about the requested role.
+
+    Every word of the role must appear in the title, except that
+    engineer/developer/programmer count as the same word. Precision beats
+    recall here: an unrelated posting silently skews every percentage.
+    """
+    title_tokens = set(re.findall(r"[a-z0-9+#]+", title.lower()))
+    for token in re.findall(r"[a-z0-9+#]+", role.lower()):
+        if token in _ROLE_SUFFIX_EQUIVALENTS:
+            if not title_tokens & _ROLE_SUFFIX_EQUIVALENTS:
+                return False
+        elif token not in title_tokens:
+            return False
+    return True
+
 
 async def _search_adzuna(
     role: str,
@@ -83,10 +134,16 @@ async def _search_adzuna(
         logger.warning("Adzuna credentials not configured — skipping Adzuna search")
         return []
 
-    country_path = ADZUNA_COUNTRY_PATHS.get(country_code.upper(), "us")
-    # Calculate pages needed (Adzuna returns 10 results per page by default)
+    if max_results < 1:
+        return []
+
+    country_path = ADZUNA_COUNTRY_PATHS.get(country_code.upper())
+    if not country_path:
+        logger.warning("Adzuna has no board for this country", extra={"country": country_code})
+        return []
+    # Adzuna serves at most 50 results per page.
     results_per_page = min(50, max_results)
-    pages = max(1, max_results // results_per_page)
+    pages = math.ceil(max_results / results_per_page)
 
     all_postings: list[JobPosting] = []
 
@@ -141,11 +198,15 @@ async def _search_adzuna(
                     posted_at=_parse_date(item.get("created")),
                 )
                 all_postings.append(posting)
+                if len(all_postings) >= max_results:
+                    break
 
             logger.debug(
                 "Adzuna page fetched",
                 extra={"page": page, "results": len(results)},
             )
+            if len(all_postings) >= max_results:
+                break
 
     logger.info(
         "Adzuna search complete",
@@ -157,35 +218,38 @@ async def _search_adzuna(
 async def _search_arbeitnow(
     role: str,
     max_results: int,
+    country_code: Optional[str] = None,
 ) -> list[JobPosting]:
     """
     Search jobs using the Arbeitnow API (no API key required).
 
-    Arbeitnow focuses on tech jobs and is completely free.
+    The API ignores its `search` parameter, so postings are kept only when
+    the title matches the role and, if a country is given, the location is
+    in that country.
 
     Args:
         role: Job title to search for.
-        max_results: Maximum number of results to fetch.
+        max_results: Maximum number of results to return.
+        country_code: Optional ISO code; postings elsewhere are dropped.
 
     Returns:
-        List of JobPosting objects.
+        List of relevant JobPosting objects.
     """
+    if max_results < 1:
+        return []
+
+    wanted_country = country_code.upper() if country_code else None
     all_postings: list[JobPosting] = []
+    scanned = 0
 
     async with httpx.AsyncClient(timeout=get_settings().API_TIMEOUT) as client:
-        page = 1
-        while len(all_postings) < max_results:
+        for page in range(1, ARBEITNOW_MAX_PAGES + 1):
             url = "https://www.arbeitnow.com/api/job-board-api"
-            params = {
-                "search": role,
-                "page": page,
-            }
-
             try:
-                response = await client.get(url, params=params)
+                response = await client.get(url, params={"search": role, "page": page})
                 response.raise_for_status()
                 data = response.json()
-            except httpx.HTTPError as e:
+            except (httpx.HTTPError, ValueError) as e:
                 logger.error("Arbeitnow API error", extra={"error": str(e)})
                 break
 
@@ -194,30 +258,39 @@ async def _search_arbeitnow(
                 break
 
             for item in jobs:
-                # Arbeitnow jobs are mostly remote/European
-                posting = JobPosting(
-                    title=item.get("title", "Unknown Title"),
+                scanned += 1
+                title = item.get("title") or ""
+                if not is_relevant_title(title, role):
+                    continue
+                location = item.get("location") or ""
+                # Unknown/remote locations stay None and are excluded whenever
+                # a specific country was requested.
+                posting_country = _infer_country_from_location(location)
+                if wanted_country and posting_country != wanted_country:
+                    continue
+                all_postings.append(JobPosting(
+                    title=title,
                     company=item.get("company_name", "Unknown"),
-                    location=item.get("location", "Remote"),
-                    country=_infer_country_from_location(item.get("location", "")),
+                    location=location or "Remote",
+                    country=posting_country,
                     description=item.get("description", ""),
                     salary=None,  # Arbeitnow rarely includes salary
-                    skills=item.get("tags", []),  # Tags are a good skill proxy
+                    skills=item.get("tags", []),  # vocabulary-filtered later
                     source="arbeitnow",
                     source_url=item.get("url"),
                     posted_at=_parse_date(item.get("created_at")),
-                )
-                all_postings.append(posting)
+                ))
                 if len(all_postings) >= max_results:
                     break
-
-            page += 1
+            if len(all_postings) >= max_results:
+                break
 
     logger.info(
         "Arbeitnow search complete",
-        extra={"role": role, "count": len(all_postings)},
+        extra={"role": role, "country": wanted_country, "scanned": scanned,
+               "relevant": len(all_postings)},
     )
-    return all_postings[:max_results]
+    return all_postings
 
 
 def _parse_date(date_str: str | None) -> datetime | None:
@@ -276,17 +349,65 @@ def _infer_country_from_location(location: str) -> str | None:
         "DE": ["germany", "berlin", "munich", "hamburg"],
         "CA": ["canada", "toronto", "vancouver", "montreal"],
         "SG": ["singapore"],
+        "FR": ["france", "paris", "lyon"],
+        "AE": ["united arab emirates", "dubai", "abu dhabi"],
     }
+    # Whole-word match: a substring test tagged e.g. "Neukölln" as UK.
     for code, keywords in country_keywords.items():
-        if any(kw in location_lower for kw in keywords):
+        if any(re.search(rf"\b{re.escape(kw)}\b", location_lower) for kw in keywords):
             return code
     return None
+
+
+async def collect_postings(
+    role: str,
+    country: Optional[str] = None,
+    max_results: int = 100,
+) -> JobSearchResult:
+    """
+    Collect postings for one role in one market from every source.
+
+    Adzuna (country-specific, relevant results) gets the full budget;
+    Arbeitnow fills whatever budget is left with postings that pass the
+    title/country filter. With no country, Adzuna uses its default board
+    and Arbeitnow is not filtered by country.
+
+    Args:
+        role: Job title to search for.
+        country: ISO country code, or None if the user named none.
+        max_results: Maximum total postings.
+
+    Returns:
+        JobSearchResult with postings and the sources that returned data.
+    """
+    adzuna_country = (country or DEFAULT_ADZUNA_COUNTRY).upper()
+    adzuna_jobs = await _search_adzuna(role, adzuna_country, max_results)
+    arbeitnow_jobs = await _search_arbeitnow(
+        role, max_results - len(adzuna_jobs), country_code=country
+    )
+
+    sources = [
+        name for name, jobs in (("adzuna", adzuna_jobs), ("arbeitnow", arbeitnow_jobs)) if jobs
+    ]
+    result = JobSearchResult(
+        query=role,
+        postings=adzuna_jobs + arbeitnow_jobs,
+        total_found=len(adzuna_jobs) + len(arbeitnow_jobs),
+        sources_queried=sources,
+        search_params={"role": role, "country": country},
+    )
+    logger.info(
+        "Job search complete",
+        extra={"role": role, "country": country, "total_found": result.total_found,
+               "sources": sources},
+    )
+    return result
 
 
 @tool
 async def search_jobs(
     role: str,
-    country: str = "US",
+    country: Optional[str] = None,
     max_results: int = 100,
 ) -> dict:
     """
@@ -297,54 +418,11 @@ async def search_jobs(
 
     Args:
         role: Job title to search for (e.g., 'AI Engineer', 'Data Scientist').
-        country: ISO country code (e.g., 'IN', 'US', 'GB'). Default: 'US'.
+        country: ISO country code (e.g., 'IN', 'US', 'GB'), or None.
         max_results: Maximum total postings to collect. Default: 100.
 
     Returns:
         Serialized JobSearchResult containing all collected postings.
     """
-    logger.info(
-        "Job search started",
-        extra={"role": role, "country": country, "max_results": max_results},
-    )
-
-    per_source = max_results // 2  # Split budget evenly between sources
-
-    # Collect from both sources in parallel would be ideal, but we do sequential
-    # here to keep the code simpler and avoid rate limit issues
-    adzuna_jobs = await _search_adzuna(
-        role=role,
-        country_code=country,
-        max_results=per_source,
-    )
-
-    arbeitnow_jobs = await _search_arbeitnow(
-        role=role,
-        max_results=per_source,
-    )
-
-    all_postings = adzuna_jobs + arbeitnow_jobs
-    sources_queried = []
-    if adzuna_jobs:
-        sources_queried.append("adzuna")
-    if arbeitnow_jobs:
-        sources_queried.append("arbeitnow")
-
-    result = JobSearchResult(
-        query=role,
-        postings=all_postings,
-        total_found=len(all_postings),
-        sources_queried=sources_queried,
-        search_params={"role": role, "country": country},
-    )
-
-    logger.info(
-        "Job search complete",
-        extra={
-            "total_found": result.total_found,
-            "sources": sources_queried,
-        },
-    )
-
     # Return as dict because LangChain tools must return serializable types
-    return result.model_dump()
+    return (await collect_postings(role, country, max_results)).model_dump()

@@ -44,6 +44,12 @@ def test_extract_skills_r_excludes_r_and_d():
     assert "R" in extract_skills_from_text(text2)
 
 
+def test_extract_skills_r_excludes_hyphenated_terms():
+    # "Mask R-CNN" is a vision model, not the R language.
+    assert "R" not in extract_skills_from_text("Trained Mask R-CNN and Faster R-CNN models")
+    assert "R" in extract_skills_from_text("Python, R and SQL")
+
+
 def test_extract_skills_claude_excludes_person_names():
     # Regression: a real observed bug — "Claude" is a common first name,
     # and bare word-boundary matching counted a recruiter's or hiring

@@ -24,10 +24,6 @@ from models.agent import MCPCallRecord
 
 logger = logging.getLogger(__name__)
 
-# Common ISO codes for ad-hoc comparisons when the query names no countries.
-_COUNTRY_CODES = ["IN", "US", "GB", "DE", "CA", "FR", "AU", "SG", "AE"]
-
-
 def _country_codes_from_plan(state: GraphState) -> list[str]:
     """
     Extract country codes from the plan's compare_countries task.
@@ -73,10 +69,17 @@ async def run_country_comparison(state: GraphState) -> dict:
     # Prefer the countries the user actually named (stored by the classifier).
     if not country_codes:
         country_codes = state.get("countries") or []
-    # Last resort: compare the extracted country against the largest markets.
-    if not country_codes:
-        base = state.get("country_filter")
-        country_codes = [base, *[c for c in _COUNTRY_CODES if c != base]][:3]
+    if len(country_codes) < 2:
+        # Never invent the second market: the user has to name it.
+        logger.info("Country comparison needs two countries", extra={"countries": country_codes})
+        return {
+            "country_comparison": {
+                "error": "A comparison needs at least two supported countries, "
+                         "e.g. 'Compare AI Engineer jobs in India vs USA'."
+            },
+            "completed_agents": state.get("completed_agents", []) + ["comparison_agent"],
+            "messages": [AIMessage(content="🌍 Country comparison skipped — fewer than two countries named.")],
+        }
 
     logger.info(
         "Country comparison starting",
@@ -87,12 +90,15 @@ async def run_country_comparison(state: GraphState) -> dict:
     try:
         from mcp_servers.registry import get_registry
         registry = get_registry()
+        # Reuse the postings MarketCollection already fetched per country
+        # instead of spending a second round of API quota on the same data.
         result = await registry.call_tool(
             "jobs",
             "compare_countries",
             {
                 "role": role,
                 "country_codes": country_codes,
+                "job_search_result": job_results_raw,
             },
         )
 

@@ -51,13 +51,6 @@ from services.llm_service import get_llm_service
 
 logger = logging.getLogger(__name__)
 
-# Default technologies to analyze when a trend query mentions no tech.
-DEFAULT_AI_TECHNOLOGIES = [
-    "Python", "LangChain", "LangGraph", "FastAPI", "Docker",
-    "LLMs", "RAG", "MCP", "Hugging Face Transformers", "PyTorch",
-    "AWS", "ChromaDB", "PostgreSQL", "Groq",
-]
-
 # Matches AI/machine-learning language so "AI job market" defaults to AI Engineer.
 _AI_ROLE_RE = re.compile(
     r"\b(ai|gen ?ai|llm|artificial intelligence|machine learning|ml)\b",
@@ -83,43 +76,6 @@ def _default_role_for_query(query: str) -> str:
     return "Software Engineer"
 
 
-def _facts_from_history(conversation_history: list[dict]) -> dict:
-    """
-    Inherit role/country/technologies from the most recent analytical turn.
-
-    Follow-up questions ("what about salaries in India?") reuse the role that
-    was discussed earlier instead of falling back to a generic default.
-
-    Args:
-        conversation_history: Prior turns as {"role", "content"} dicts.
-
-    Returns:
-        Dict with role, country, countries, technologies (may be empty).
-    """
-    facts: dict = {"role": None, "country": None, "countries": [], "technologies": []}
-    if not conversation_history:
-        return facts
-
-    for turn in reversed(conversation_history):
-        if not isinstance(turn, dict) or turn.get("role") != "user":
-            continue
-        prev_query = turn.get("content", "")
-        if not prev_query:
-            continue
-        prev_role = _extract_role_from_query(prev_query)
-        prev_country = _extract_country_from_query(prev_query)
-        prev_tech = _extract_technologies_from_query(prev_query)
-        if prev_role and not facts["role"]:
-            facts["role"] = prev_role
-        if prev_country and not facts["country"]:
-            facts["country"] = prev_country
-        if prev_tech and not facts["technologies"]:
-            facts["technologies"] = prev_tech
-        if facts["role"] and facts["country"] and facts["technologies"]:
-            break
-    return facts
-
-
 async def run_planner(state: GraphState) -> dict:
     """
     The Planner agent node function.
@@ -138,50 +94,27 @@ async def run_planner(state: GraphState) -> dict:
     logger.info("Planner starting", extra={"query": user_query, "intent": intent})
 
     # --- Step 1: Extract simple facts deterministically (no LLM) -------
+    # The classifier already resolved what this turn inherits from the
+    # conversation, so the planner never re-reads history itself; it only
+    # extracts from the query when it runs without the classifier (API/tests).
     role = state.get("role") or _extract_role_from_query(user_query)
     country = state.get("country_filter") or _extract_country_from_query(user_query)
     countries = state.get("countries") or []
 
-    # For follow-up questions, inherit facts from the previous analytical turn
-    # so "what about salaries in India?" keeps the earlier role (e.g. DevOps).
-    inherited = _facts_from_history(conversation_history)
-    if not role:
-        role = inherited["role"]
-    if not country:
-        country = inherited["country"]
-    if not countries:
-        countries = state.get("countries") or []
-
     # For genuine analytical queries with no explicit role, use a sensible
-    # generic market default — this is a real job-market question, not an
-    # ambiguous one, so a concrete role is required to search APIs.
-    # Track that this is a GUESS, not something the user actually said —
-    # without this flag, downstream messages quoted the default role back
-    # at the user as if they had asked about it, which reads as the system
-    # being hardcoded to one role rather than genuinely adapting to what
-    # was asked.
+    # generic market default — a concrete role is required to search APIs.
+    # Track that this is a GUESS so downstream answers say so instead of
+    # quoting the default back as if the user had asked about it.
     role_is_default = False
     if not role and intent in ANALYTICAL_INTENTS:
         role = _default_role_for_query(user_query)
         role_is_default = True
 
-    technologies = state.get("technologies_to_analyze") or []
-    if not technologies:
-        technologies = _extract_technologies_from_query(user_query)
-    # Only inherit technologies from an earlier turn when THIS query has no
-    # role of its own. A query naming its own role (e.g. "what technology
-    # should I learn for a Cloud Engineer?") is a brand-new, self-sufficient
-    # question — inheriting a leftover technology name from an unrelated
-    # earlier question (e.g. "should I learn Python?") caused a spurious,
-    # unrelated Technology Trends section to appear in an otherwise-correct
-    # job_market report. This mirrors the same guard in agents/classifier.py
-    # (this is a second, independent place the same leak could happen from,
-    # since the planner re-derives facts from conversation_history itself
-    # rather than trusting the classifier's already-fixed output).
-    if not technologies and not _extract_role_from_query(user_query):
-        technologies = inherited["technologies"]
-    if not technologies and intent == QueryIntent.TECH_TREND.value:
-        technologies = DEFAULT_AI_TECHNOLOGIES
+    # No technology named on a trend question is fine: TrendAnalysis then
+    # ranks the skills actually found in the collected postings.
+    technologies = (
+        state.get("technologies_to_analyze") or _extract_technologies_from_query(user_query)
+    )
 
     # --- Step 2: Call LLM to create the execution plan -----------------
     llm_service = get_llm_service()
@@ -224,6 +157,11 @@ async def run_planner(state: GraphState) -> dict:
             intent=intent,
             technologies=technologies,
         )
+    else:
+        # The LLM proposes; deterministic rules guarantee the tasks the
+        # classified intent needs (an LLM plan for "India vs USA" that
+        # forgets compare_countries must not silently skip the comparison).
+        _ensure_required_tasks(plan, intent, role, country, countries, technologies, has_resume)
 
     # If even the fallback produced no work (shouldn't happen for
     # analytical intents), stop gracefully and let the ChatResponder explain.
@@ -381,6 +319,58 @@ def _default_mcp_servers_for_task(task_type: str) -> list[MCPServerType]:
     return mapping.get(task_type, [])
 
 
+def _ensure_required_tasks(
+    plan: PlannerOutput,
+    intent: str,
+    role: Optional[str],
+    country: Optional[str],
+    countries: list[str],
+    technologies: list[str],
+    has_resume: bool,
+) -> None:
+    """
+    Add any task the intent requires that the LLM plan left out.
+
+    Args:
+        plan: LLM-produced plan (modified in place).
+        intent: Classified intent.
+        role: Resolved role.
+        country: Resolved primary country.
+        countries: All resolved countries.
+        technologies: Technologies to analyze.
+        has_resume: Whether a resume is on file.
+    """
+    params: dict = {k: v for k, v in (("role", role), ("country", country)) if v}
+    required: list[AgentTask] = [
+        AgentTask(task_type=TaskType.COLLECT_JOBS, parameters=params,
+                  required_mcp_servers=[MCPServerType.JOBS]),
+    ]
+    if intent == QueryIntent.COUNTRY_COMPARISON.value:
+        required.append(AgentTask(
+            task_type=TaskType.COMPARE_COUNTRIES,
+            parameters={**params, "country_codes": countries},
+            required_mcp_servers=[MCPServerType.JOBS],
+        ))
+    if intent == QueryIntent.TECH_TREND.value:
+        required.append(AgentTask(
+            task_type=TaskType.ANALYZE_TRENDS,
+            parameters={**params, "technologies": technologies} if technologies else params,
+            required_mcp_servers=[MCPServerType.GITHUB],
+        ))
+    if intent == QueryIntent.RESUME_ANALYSIS.value and has_resume:
+        required.append(AgentTask(
+            task_type=TaskType.ANALYZE_RESUME, parameters=params,
+            required_mcp_servers=[MCPServerType.FILESYSTEM],
+        ))
+
+    present = {t.task_type for t in plan.tasks}
+    missing = [t for t in required if t.task_type not in present]
+    if missing:
+        logger.info("Added tasks the LLM plan missed",
+                    extra={"tasks": [t.task_type.value for t in missing]})
+        plan.tasks = [*missing, *plan.tasks]
+
+
 # ============================================================
 # Fallback plan (used when the LLM is unavailable)
 # ============================================================
@@ -428,15 +418,16 @@ def _create_fallback_plan(
             task_type=TaskType.ANALYZE_SALARIES,
             parameters=params,
         ))
-    elif intent == QueryIntent.TECH_TREND.value and technologies:
+    elif intent == QueryIntent.TECH_TREND.value:
         tasks.append(AgentTask(
             task_type=TaskType.COLLECT_JOBS,
             parameters=params,
             required_mcp_servers=[MCPServerType.JOBS],
         ))
+        trend_params = {**params, "technologies": technologies} if technologies else params
         tasks.append(AgentTask(
             task_type=TaskType.ANALYZE_TRENDS,
-            parameters={**params, "technologies": technologies},
+            parameters=trend_params,
             required_mcp_servers=[MCPServerType.GITHUB],
         ))
     elif intent == QueryIntent.COUNTRY_COMPARISON.value:

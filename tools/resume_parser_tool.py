@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -36,6 +37,21 @@ from models.skill import Skill, SkillCategory
 from tools.skill_extractor_tool import _infer_skill_category
 
 logger = logging.getLogger(__name__)
+
+# Below this much text a "resume" is empty or a scanned image.
+MIN_RESUME_TEXT_CHARS = 150
+
+# Headings that resumes have and arbitrary documents (CSV exports,
+# invoices, reports) don't.
+_RESUME_SECTION_RE = re.compile(
+    r"\b(experience|work history|employment|education|skills|projects?|internships?"
+    r"|certifications?|summary|objective|achievements|qualifications|profile)\b",
+    re.IGNORECASE,
+)
+_CONTACT_RE = re.compile(
+    r"[\w.+-]+@[\w-]+\.[\w.]+|linkedin\.com|github\.com|\+?\d[\d\s().-]{8,}\d",
+    re.IGNORECASE,
+)
 
 
 def extract_text_from_pdf(file_path: Path) -> str:
@@ -137,6 +153,16 @@ def extract_text_from_txt(file_path: Path) -> str:
     raise ValueError(f"Cannot decode text file: {file_path}")
 
 
+# The formats we can actually extract text from. Legacy binary .doc is not
+# here: python-docx only reads .docx, so accepting .doc would fail silently.
+_EXTRACTORS = {
+    ".pdf": extract_text_from_pdf,
+    ".docx": extract_text_from_docx,
+    ".txt": extract_text_from_txt,
+}
+SUPPORTED_RESUME_EXTENSIONS: frozenset[str] = frozenset(_EXTRACTORS)
+
+
 def extract_text_from_file(file_path: str | Path) -> str:
     """
     Extract raw text from a resume file, detecting format automatically.
@@ -158,19 +184,11 @@ def extract_text_from_file(file_path: str | Path) -> str:
 
     extension = path.suffix.lower()
 
-    extractors = {
-        ".pdf": extract_text_from_pdf,
-        ".docx": extract_text_from_docx,
-        ".doc": extract_text_from_docx,  # Try docx parser for .doc too
-        ".txt": extract_text_from_txt,
-        ".text": extract_text_from_txt,
-    }
-
-    extractor = extractors.get(extension)
+    extractor = _EXTRACTORS.get(extension)
     if not extractor:
         raise ValueError(
-            f"Unsupported file format: {extension}. "
-            f"Supported formats: {list(extractors.keys())}"
+            f"Unsupported file format: {extension or 'no extension'}. "
+            f"Supported formats: {', '.join(sorted(SUPPORTED_RESUME_EXTENSIONS))}"
         )
 
     raw_text = extractor(path)
@@ -224,6 +242,94 @@ def estimate_experience_years(text: str) -> Optional[float]:
                 continue
 
     return None
+
+
+@dataclass
+class ResumeValidation:
+    """Outcome of checking an uploaded file before treating it as a resume."""
+
+    ok: bool
+    reason: str = ""
+    text: str = ""
+    skills: list[str] = field(default_factory=list)
+
+
+def validate_resume_file(
+    file_path: str | Path,
+    display_name: Optional[str] = None,
+    max_size_mb: Optional[float] = None,
+) -> ResumeValidation:
+    """
+    Decide whether an uploaded file is a resume we can analyze.
+
+    Checks, in order: supported format, size limit, extractable text, and
+    resume structure (resume section headings, contact details, or several
+    technical skills). Anything else (a CSV export, an invoice, a scanned
+    image) is rejected with a reason the user can act on, instead of being
+    scored as a resume with zero skills.
+
+    Args:
+        file_path: Where the uploaded file is on disk.
+        display_name: The name the user uploaded it as (defaults to the path name).
+        max_size_mb: Size limit; None means no limit.
+
+    Returns:
+        ResumeValidation with ok, a user-facing reason, and the parsed text/skills.
+    """
+    path = Path(file_path)
+    name = display_name or path.name
+    extension = Path(name).suffix.lower() or path.suffix.lower()
+
+    if extension not in SUPPORTED_RESUME_EXTENSIONS:
+        return ResumeValidation(
+            ok=False,
+            reason=(
+                f"**{name}** isn't a supported resume format. Please upload a "
+                f"{', '.join(sorted(SUPPORTED_RESUME_EXTENSIONS))} file."
+            ),
+        )
+
+    if max_size_mb is not None and path.stat().st_size > max_size_mb * 1024 * 1024:
+        return ResumeValidation(
+            ok=False, reason=f"**{name}** is larger than the {max_size_mb:g} MB limit."
+        )
+
+    try:
+        # Parse by the uploaded name's extension: temp upload paths may have none.
+        text = _clean_extracted_text(_EXTRACTORS[extension](path))
+    except Exception as e:
+        logger.warning("Resume text extraction failed", extra={"file": name, "error": str(e)})
+        return ResumeValidation(
+            ok=False, reason=f"I couldn't read **{name}**; the file may be corrupted or protected."
+        )
+
+    if len(text) < MIN_RESUME_TEXT_CHARS:
+        return ResumeValidation(
+            ok=False,
+            reason=(
+                f"I couldn't find readable text in **{name}**. If it's a scanned "
+                "image, please upload a text-based PDF, DOCX, or TXT instead."
+            ),
+        )
+
+    skills = extract_skills_from_text(text)
+    sections = {m.lower() for m in _RESUME_SECTION_RE.findall(text)}
+    has_contact = bool(_CONTACT_RE.search(text))
+    looks_like_resume = (
+        len(sections) >= 2
+        or (sections and has_contact)
+        or (len(skills) >= 3 and has_contact)
+    )
+    if not looks_like_resume:
+        return ResumeValidation(
+            ok=False,
+            reason=(
+                f"**{name}** doesn't look like a resume (no sections like Experience, "
+                "Education or Skills, and no contact details). Please upload your resume."
+            ),
+        )
+
+    return ResumeValidation(ok=True, text=text, skills=skills)
 
 
 @tool

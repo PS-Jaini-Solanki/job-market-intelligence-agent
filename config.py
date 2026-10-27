@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     # ----------------------------------------------------------
     GROQ_API_KEY: str = Field(default="", description="Groq API key")
     GROQ_MODEL: str = Field(
-        default="llama-3.3-70b-versatile",
+        default="openai/gpt-oss-120b",
         description="Groq model to use",
     )
     GROQ_MAX_TOKENS: int = Field(default=4096)

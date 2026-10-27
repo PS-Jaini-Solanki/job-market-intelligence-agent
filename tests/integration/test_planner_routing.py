@@ -165,13 +165,18 @@ def test_classify_greeting_never_inherits_context():
     assert result.intent == QueryIntent.GENERAL_CHAT
 
 
-def test_planner_inherits_role_from_history():
-    from agents.planner import _facts_from_history
-    history = [
-        {"role": "user", "content": "what skills are required for devops engineers"},
-    ]
-    facts = _facts_from_history(history)
-    assert facts["role"] == "DevOps Engineer"
+def test_planner_uses_role_resolved_by_classifier():
+    # The classifier owns conversation context; the planner takes its result.
+    import asyncio
+    from agents.planner import run_planner
+    from agents.state import create_initial_state
+
+    state = create_initial_state("what about salaries?")
+    state.update(query_intent="salary", role="DevOps Engineer", country_filter="IN")
+    result = asyncio.run(run_planner(state))
+    assert result["role"] == "DevOps Engineer"
+    assert result["country_filter"] == "IN"
+    assert result["role_is_default"] is False
 
 
 def test_planner_does_not_inherit_stale_technologies_for_new_role_query():
@@ -199,9 +204,20 @@ def test_planner_does_not_inherit_stale_technologies_for_new_role_query():
     assert result["technologies_to_analyze"] == []
 
 
-def test_planner_history_empty_returns_no_facts():
-    from agents.planner import _facts_from_history
-    assert _facts_from_history([])["role"] is None
+def test_planner_never_reads_role_from_history_itself():
+    # Regression: the planner used to re-derive facts from history on its
+    # own, so an off-topic turn the classifier left role-less could still
+    # pick up an earlier role.
+    import asyncio
+    from agents.planner import run_planner
+    from agents.state import create_initial_state
+
+    history = [{"role": "user", "content": "what skills are required for devops engineers"}]
+    state = create_initial_state("which skills are in demand?", conversation_history=history)
+    state["query_intent"] = "job_market"
+    result = asyncio.run(run_planner(state))
+    assert result["role_is_default"] is True
+    assert result["role"] != "DevOps Engineer"
 
 
 def test_recommendation_filters_skills_user_already_has():
@@ -213,3 +229,19 @@ def test_recommendation_filters_skills_user_already_has():
     filtered = _filter_known_skills(recs, ["AWS"])
     assert len(filtered) == 1
     assert "Azure" in filtered[0]
+
+
+def test_planner_adds_tasks_the_llm_plan_missed():
+    from agents.planner import _ensure_required_tasks
+    from models.agent import AgentTask, PlannerOutput, TaskType
+
+    plan = PlannerOutput(
+        tasks=[AgentTask(task_type=TaskType.GENERATE_REPORT, parameters={})],
+        reasoning="llm plan", query_type="country_comparison",
+    )
+    _ensure_required_tasks(plan, "country_comparison", "AI Engineer", "IN", ["IN", "US"], [], False)
+    types = [t.task_type for t in plan.tasks]
+    assert TaskType.COLLECT_JOBS in types
+    assert TaskType.COMPARE_COUNTRIES in types
+    compare = next(t for t in plan.tasks if t.task_type == TaskType.COMPARE_COUNTRIES)
+    assert compare.parameters["country_codes"] == ["IN", "US"]

@@ -14,8 +14,9 @@ GRAPH FLOW:
 START → query_classifier
        ├── analytical intent → planner → market_collection → skill_extraction
        │        → trend_analysis (conditional) → resume_analysis (conditional)
-       │        → recommendation → report_generation → END
-       └── conversational intent → chat_responder → END
+       │        → comparison_agent (conditional) → recommendation
+       │        → final_answer → report_generation → END
+       └── conversational intent / unsupported country → chat_responder → END
 
 The QueryClassifier decides between the two families.
 """
@@ -53,14 +54,17 @@ def route_after_classifier(state: GraphState) -> Literal["planner", "chat_respon
     """
     Route to the analytical pipeline or the direct chat responder.
 
-    The classifier's intent decides:
     - Analytical (job_market, salary, trends, comparison, resume) → planner
     - Conversational (general_chat, out_of_scope) → chat_responder
+    - Analytical, but every country named is one the job sources can't
+      cover (e.g. only "Japan") → chat_responder, which says so honestly
+      instead of answering with another country's data.
     """
-    intent = state.get("query_intent")
-    if is_analytical(intent):
-        return "planner"
-    return "chat_responder"
+    if not is_analytical(state.get("query_intent")):
+        return "chat_responder"
+    if state.get("unsupported_countries") and not state.get("countries"):
+        return "chat_responder"
+    return "planner"
 
 
 def route_after_planner(state: GraphState) -> Literal["market_collection", "chat_responder"]:
@@ -76,63 +80,68 @@ def route_after_planner(state: GraphState) -> Literal["market_collection", "chat
     return "market_collection"
 
 
-def should_analyze_trends(
-    state: GraphState,
-) -> Literal["trend_analysis", "resume_analysis"]:
-    """
-    Decide whether to run trend analysis based on the plan.
-
-    Runs trend analysis if the plan includes an analyze_trends task or
-    technologies are present in state.
-    """
-    plan = state.get("execution_plan", {})
-    tasks = plan.get("tasks", [])
-    technologies = state.get("technologies_to_analyze", [])
-
-    has_trend_task = any(t.get("task_type") == "analyze_trends" for t in tasks)
-
-    if has_trend_task or technologies:
-        return "trend_analysis"
-    return "resume_analysis"
+def _plan_task_types(state: GraphState) -> set[str]:
+    """Task types in the current execution plan."""
+    plan = state.get("execution_plan") or {}
+    return {t.get("task_type") for t in plan.get("tasks", [])}
 
 
 def _has_compare_countries_task(state: GraphState) -> bool:
-    """True if the plan contains a compare_countries task."""
-    plan = state.get("execution_plan", {})
-    tasks = plan.get("tasks", [])
-    return any(t.get("task_type") == "compare_countries" for t in tasks)
-
+    """
+    True if a country comparison is needed: the plan says so, or the
+    deterministic classifier did (routing never depends on the LLM alone).
+    """
+    return (
+        "compare_countries" in _plan_task_types(state)
+        or state.get("query_intent") == "country_comparison"
+    )
 
 
 # Intents where running resume analysis actually serves the question.
-# A resume uploaded earlier in the conversation stays in session state
-# for the rest of the chat (see chainlit_ui/app.py), so `resume_path`
-# can still be set on turns that have nothing to do with the resume —
-# e.g. "what's the average salary in Germany?" right after uploading a
-# resume for an India role. Running (and expensively LLM-scoring) a
-# resume gap analysis on every later turn regardless of relevance was
-# both wasted work and, until final_answer.py was fixed to also check
-# intent, the reason unrelated questions got a stale resume report
-# instead of an answer.
+# A resume uploaded earlier stays in the session for later turns, so
+# `resume_path` alone must never trigger a gap analysis: "what's the
+# average salary in Germany?" after uploading a resume is a salary
+# question. job_market is included because "what skills do I need for X"
+# with a resume on file is answered with the user's personal gaps too.
 _RESUME_RELEVANT_INTENTS = {"resume_analysis", "job_market"}
+
+
+def _wants_resume_analysis(state: GraphState) -> bool:
+    """Single gate for resume analysis, used by every route into it."""
+    return bool(state.get("resume_path")) and state.get("query_intent") in _RESUME_RELEVANT_INTENTS
 
 
 def should_analyze_resume(
     state: GraphState,
 ) -> Literal["resume_analysis", "comparison_agent", "recommendation"]:
     """
-    Decide whether to run resume analysis based on the plan.
+    Pick the next analysis step after skills (and trends, if they ran).
 
-    Runs resume analysis only if a resume_path exists AND the current
-    turn's intent is actually resume-relevant. Otherwise, if a
-    compare_countries task is pending, route to the comparison agent so
-    it is never skipped by the trend-analysis path.
+    Resume analysis runs only when a resume is on file AND this turn's
+    intent is resume-relevant. Otherwise a pending compare_countries task
+    goes to the comparison agent so it is never skipped.
     """
-    if state.get("resume_path") and state.get("query_intent") in _RESUME_RELEVANT_INTENTS:
+    if _wants_resume_analysis(state):
         return "resume_analysis"
     if _has_compare_countries_task(state):
         return "comparison_agent"
     return "recommendation"
+
+
+def should_analyze_trends(
+    state: GraphState,
+) -> Literal["trend_analysis", "resume_analysis", "comparison_agent", "recommendation"]:
+    """
+    Run trend analysis for trend questions (plan task, named technologies,
+    or tech_trend intent); otherwise continue with should_analyze_resume.
+    """
+    if (
+        "analyze_trends" in _plan_task_types(state)
+        or state.get("technologies_to_analyze")
+        or state.get("query_intent") == "tech_trend"
+    ):
+        return "trend_analysis"
+    return should_analyze_resume(state)
 
 
 def should_run_country_comparison(
@@ -143,10 +152,7 @@ def should_run_country_comparison(
 
     Only used when the plan explicitly contains a compare_countries task.
     """
-    plan = state.get("execution_plan", {})
-    tasks = plan.get("tasks", [])
-    has_comparison = any(t.get("task_type") == "compare_countries" for t in tasks)
-    if has_comparison:
+    if _has_compare_countries_task(state):
         return "comparison_agent"
     return "recommendation"
 
@@ -204,13 +210,16 @@ def build_graph() -> StateGraph:
     # market_collection → skill_extraction (always)
     graph.add_edge("market_collection", "skill_extraction")
 
-    # skill_extraction → trend_analysis OR resume_analysis (conditional)
+    # skill_extraction → trend_analysis OR resume/comparison/recommendation
+    # (the same resume gate applies whether or not trends ran)
     graph.add_conditional_edges(
         "skill_extraction",
         should_analyze_trends,
         {
             "trend_analysis": "trend_analysis",
             "resume_analysis": "resume_analysis",
+            "comparison_agent": "comparison_agent",
+            "recommendation": "recommendation",
         },
     )
 

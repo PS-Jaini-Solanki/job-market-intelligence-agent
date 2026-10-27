@@ -53,12 +53,12 @@ async def run_market_collection(state: GraphState) -> dict:
 
     # For multi-country queries (e.g. "Compare India vs USA"), collect postings
     # for EVERY country the user mentioned so the comparison has real data for
-    # each market. Otherwise fall back to the single country filter.
-    countries_to_collect = [c.upper() for c in countries if isinstance(c, str) and c]
-    if not countries_to_collect and country:
-        countries_to_collect = [country.upper()]
+    # each market. None means the user named no country.
+    countries_to_collect: list[Optional[str]] = [
+        c.upper() for c in countries if isinstance(c, str) and c
+    ]
     if not countries_to_collect:
-        countries_to_collect = ["US"]
+        countries_to_collect = [country.upper() if country else None]
 
     logger.info(
         "Market collection starting",
@@ -74,100 +74,73 @@ async def run_market_collection(state: GraphState) -> dict:
     per_country = max(settings_max // len(countries_to_collect), 1)
     collected_postings = []
     collected_sources: list[str] = []
+    mcp_failed = False
     for c in countries_to_collect:
-        result = await registry.call_tool(
-            "jobs",
-            "search_jobs",
-            {"role": role, "country": c, "max_results": per_country},
-        )
+        arguments = {"role": role, "max_results": per_country}
+        if c:
+            arguments["country"] = c
+        label = c or "no country specified"
+        result = await registry.call_tool("jobs", "search_jobs", arguments)
+        partial: Optional[JobSearchResult] = None
+        error = result.error
         if result.success and result.result:
             try:
                 partial = JobSearchResult.model_validate(result.result)
-                collected_postings.extend(partial.postings)
-                for src in partial.sources_queried:
-                    if src not in collected_sources:
-                        collected_sources.append(src)
-                mcp_calls = [
-                    *mcp_calls,
-                    MCPCallRecord(
-                        agent="market_collection",
-                        server="jobs",
-                        tool="search_jobs",
-                        arguments={"role": role, "country": c, "max_results": per_country},
-                        success=True,
-                        summary=f"Collected {len(partial.postings)} postings for {c} "
-                                f"({', '.join(partial.sources_queried) or 'no sources'})",
-                    ).model_dump(),
-                ]
             except Exception as e:
-                logger.error(
-                    "Could not validate jobs MCP result",
-                    extra={"error": str(e), "country": c},
-                )
-                mcp_calls = [
-                    *mcp_calls,
-                    MCPCallRecord(
-                        agent="market_collection",
-                        server="jobs",
-                        tool="search_jobs",
-                        arguments={"role": role, "country": c, "max_results": per_country},
-                        success=False,
-                        summary=f"Failed for {c}: {str(e)[:80]}",
-                    ).model_dump(),
-                ]
-
-    job_results: Optional[JobSearchResult] = None
-    if collected_postings:
-        job_results = JobSearchResult(
-            query=role,
-            postings=collected_postings,
-            total_found=len(collected_postings),
-            sources_queried=collected_sources,
-            search_params={"role": role, "countries": countries_to_collect},
-        )
-
-    if job_results is None:
-        # Fallback: call the underlying tool directly so we never hard-fail.
-        from tools.job_search_tool import _search_adzuna, _search_arbeitnow
-        logger.warning("Jobs MCP failed — falling back to direct tool calls")
-        per_source = max(settings_max // (2 * len(countries_to_collect)), 1)
-        adzuna_jobs = []
-        for c in countries_to_collect:
-            adzuna_jobs.extend(await _search_adzuna(
-                role=role, country_code=c, max_results=per_source
-            ))
-        arbeitnow_jobs = await _search_arbeitnow(role=role, max_results=per_source)
-        all_postings = adzuna_jobs + arbeitnow_jobs
-        sources = []
-        if adzuna_jobs:
-            sources.append("adzuna")
-        if arbeitnow_jobs:
-            sources.append("arbeitnow")
-
-        job_results = JobSearchResult(
-            query=role,
-            postings=all_postings,
-            total_found=len(all_postings),
-            sources_queried=sources,
-            search_params={"role": role, "countries": countries_to_collect},
-        )
+                error = str(e)
+        if partial is None:
+            mcp_failed = True
+            logger.error("Jobs MCP call failed", extra={"error": error, "country": label})
+        else:
+            collected_postings.extend(partial.postings)
+            collected_sources.extend(s for s in partial.sources_queried if s not in collected_sources)
         mcp_calls = [
             *mcp_calls,
             MCPCallRecord(
                 agent="market_collection",
                 server="jobs",
                 tool="search_jobs",
-                arguments={"role": role, "countries": countries_to_collect, "max_results": settings_max},
-                success=len(all_postings) > 0,
+                arguments=arguments,
+                success=partial is not None,
                 summary=(
-                    f"Collected {len(all_postings)} postings (fallback path)"
-                    if all_postings else "No postings found (fallback path)"
+                    f"Collected {len(partial.postings)} postings for {label} "
+                    f"({', '.join(partial.sources_queried) or 'no matching postings'})"
+                    if partial is not None else f"Failed for {label}: {str(error)[:80]}"
                 ),
             ).model_dump(),
         ]
 
+    if mcp_failed and not collected_postings:
+        # Fallback: call the collector directly so an MCP-layer failure
+        # never hides data the job APIs can still provide.
+        from tools.job_search_tool import collect_postings
+        logger.warning("Jobs MCP failed — falling back to direct tool calls")
+        for c in countries_to_collect:
+            partial = await collect_postings(role, c, per_country)
+            collected_postings.extend(partial.postings)
+            collected_sources.extend(s for s in partial.sources_queried if s not in collected_sources)
+        mcp_calls = [
+            *mcp_calls,
+            MCPCallRecord(
+                agent="market_collection",
+                server="jobs",
+                tool="search_jobs",
+                arguments={"role": role, "countries": countries_to_collect, "max_results": per_country},
+                success=bool(collected_postings),
+                summary=f"Collected {len(collected_postings)} postings (direct fallback path)",
+            ).model_dump(),
+        ]
+
+    job_results = JobSearchResult(
+        query=role,
+        postings=collected_postings,
+        total_found=len(collected_postings),
+        sources_queried=collected_sources,
+        search_params={"role": role, "countries": [c for c in countries_to_collect if c]},
+    )
+
     postings_count = len(job_results.postings)
-    sources_str = ", ".join(job_results.sources_queried) or "no sources configured"
+    sources_str = ", ".join(job_results.sources_queried) or "no source (no matching postings)"
 
     logger.info(
         "Market collection complete",

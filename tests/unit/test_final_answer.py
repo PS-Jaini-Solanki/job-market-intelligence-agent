@@ -222,3 +222,51 @@ def test_no_data_fallback():
     state = _state(query_intent="job_market", role="AI Engineer")
     answer = compose_final_answer(state)
     assert "couldn't find enough live postings" in answer
+
+
+def test_job_market_answer_with_resume_on_file_answers_question_first():
+    state = _state(
+        query_intent="job_market", role="AI Engineer", country_filter="IN",
+        skill_statistics=SAMPLE_SKILL_STATS,
+        resume_analysis={
+            "gap_score": 33.3, "matching_skills": [{"normalized_name": "Python"}],
+            "missing_skills": [{"skill": {"normalized_name": "AWS"},
+                                "market_demand_percentage": 14.0, "priority": "MEDIUM"}],
+        },
+    )
+    answer = compose_final_answer(state)
+    assert answer.startswith("## Top in-demand skills for **AI Engineer** in **India**")
+    assert "Market Fit Score **33.3/100**" in answer
+    assert "AWS" in answer
+
+
+def test_resume_with_no_recognized_skills_is_not_scored_zero():
+    state = _state(query_intent="resume_analysis",
+                   resume_data={"file_name": "cv.pdf", "extracted_skills": []})
+    answer = compose_final_answer(state)
+    assert "couldn't find any technical skills" in answer
+    assert "Market Fit Score" not in answer
+
+
+def test_sources_come_from_what_was_actually_collected():
+    state = _state(
+        query_intent="job_market", role="AI Engineer", country_filter="IN",
+        skill_statistics=SAMPLE_SKILL_STATS,
+        job_search_results={"sources_queried": ["adzuna"], "postings": []},
+    )
+    assert "(adzuna)" in compose_final_answer(state)
+
+
+def test_unsupported_country_is_disclosed():
+    state = _state(query_intent="job_market", role="AI Engineer", country_filter="IN",
+                   countries=["IN"], unsupported_countries=["Japan"],
+                   skill_statistics=SAMPLE_SKILL_STATS)
+    assert "Japan is not covered" in compose_final_answer(state)
+
+
+def test_missing_country_is_disclosed_not_called_global():
+    state = _state(query_intent="job_market", role="AI Engineer",
+                   skill_statistics=SAMPLE_SKILL_STATS)
+    answer = compose_final_answer(state)
+    assert "globally" not in answer
+    assert "You didn't name a country" in answer

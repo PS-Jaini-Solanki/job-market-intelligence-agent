@@ -107,6 +107,22 @@ async def run_resume_analysis(state: GraphState) -> dict:
         experience_years=experience_years,
     )
 
+    # A resume with no recognizable technical skills can't be scored: a
+    # "0/100, you match nothing" fit score would be a wrong claim, not data.
+    if not resume_skills:
+        logger.warning("No technical skills recognized in resume", extra={"file": resume.file_name})
+        return {
+            "resume_data": resume.model_dump(),
+            "mcp_calls": mcp_calls,
+            "errors": state.get("errors", []) + [
+                "Resume parsed but no recognizable technical skills found"
+            ],
+            "completed_agents": state.get("completed_agents", []) + ["resume_analysis"],
+            "messages": [
+                AIMessage(content="📄 Resume parsed — no recognizable technical skills found, so no fit score.")
+            ],
+        }
+
     # Step 2: Get market skill statistics from state
     skill_stats_raw = state.get("skill_statistics") or []
     if not skill_stats_raw:
@@ -172,7 +188,11 @@ async def run_resume_analysis(state: GraphState) -> dict:
         else 0.0
     )
 
-    query_context = f"{state.get('role', 'Software Engineer')} in {state.get('country_filter') or 'global market'}"
+    from tools.job_search_tool import DEFAULT_ADZUNA_COUNTRY, country_name
+    market = country_name(state.get("country_filter")) or (
+        f"{country_name(DEFAULT_ADZUNA_COUNTRY)} (default market)"
+    )
+    query_context = f"{state.get('role') or 'Software Engineer'} roles in {market}"
 
     analysis = ResumeAnalysis(
         resume_id=resume.id,
@@ -182,7 +202,7 @@ async def run_resume_analysis(state: GraphState) -> dict:
         bonus_skills=bonus_skills[:10],
         gap_score=round(gap_score, 1),
         total_postings_analyzed=total_postings,
-        sources=list(set(s for stat in skill_stats_raw[:1] for s in stat.get("sources", []))),
+        sources=(state.get("job_search_results") or {}).get("sources_queried") or [],
     )
 
     logger.info(

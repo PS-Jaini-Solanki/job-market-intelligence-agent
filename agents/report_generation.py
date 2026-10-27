@@ -92,7 +92,7 @@ async def run_report_generation(state: GraphState) -> dict:
                 skill=skill,
                 occurrence_count=s["occurrence_count"],
                 total_postings_analyzed=s["total_postings"],
-                sources=s.get("sources", ["adzuna", "arbeitnow"]),
+                sources=s.get("sources", []),
                 country=country,
             )
             stats_for_builder.append(stat)

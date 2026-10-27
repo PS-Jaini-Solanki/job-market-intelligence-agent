@@ -11,7 +11,7 @@ An advanced, production-quality Agentic AI system that analyzes the technology j
 - **Real-Time UI**: Built with Chainlit to visualize agent reasoning, tool calls, and execution steps in real-time.
 
 ## Tech Stack
-- **AI/Agents**: LangChain, LangGraph, Groq (Llama 3.3 70b)
+- **AI/Agents**: LangChain, LangGraph, Groq (GPT-OSS 120B, open-weights)
 - **Backend**: Python 3.12, FastAPI, PostgreSQL, SQLAlchemy, Alembic
 - **Frontend**: Chainlit
 - **Infrastructure**: Docker, Docker Compose

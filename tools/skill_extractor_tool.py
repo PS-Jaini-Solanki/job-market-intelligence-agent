@@ -87,8 +87,9 @@ def _get_skill_patterns() -> dict[str, re.Pattern]:
         _SKILL_PATTERNS["c#"] = re.compile(r"\bC#\b", re.IGNORECASE)
         _SKILL_PATTERNS[".net"] = re.compile(r"\.NET\b", re.IGNORECASE)
         # "R" the language: require the capitalized standalone token and
-        # exclude "R&D" / "R & D", by far the most common false positive.
-        _SKILL_PATTERNS["r"] = re.compile(r"\bR\b(?!\s*&\s*D\b)")
+        # exclude "R&D" / "R & D" and hyphenated terms ("Mask R-CNN",
+        # "R-squared"), the common false positives.
+        _SKILL_PATTERNS["r"] = re.compile(r"(?<!-)\bR\b(?!\s*&\s*D\b)(?!-)")
         # "Go" the language: require the capitalized standalone token and
         # exclude it when followed by common English phrasal-verb
         # continuations ("go to the careers page", "go live", etc.).

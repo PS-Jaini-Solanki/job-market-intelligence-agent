@@ -55,6 +55,10 @@ class GraphState(TypedDict):
     # All ISO country codes detected in the query (for comparisons)
     countries: list[str]
 
+    # Countries the user named that the job sources can't cover (e.g.
+    # "Japan"), so answers say so instead of using another country's data
+    unsupported_countries: list[str]
+
     # Job role to search for (e.g., "AI Engineer")
     role: Optional[str]
 
@@ -68,8 +72,11 @@ class GraphState(TypedDict):
     # hardcoded to one role instead of a dynamic one.
     role_is_default: Optional[bool]
 
-    # Path to uploaded resume file, if any
+    # Path to uploaded resume file, if any (may be from an earlier turn)
     resume_path: Optional[str]
+
+    # True only when a validated resume was attached to THIS message
+    resume_attached: bool
 
     # Technologies to analyze (for trend queries)
     technologies_to_analyze: list[str]
@@ -173,6 +180,7 @@ def create_initial_state(
     technologies: Optional[list[str]] = None,
     query_id: Optional[str] = None,
     conversation_history: Optional[list[dict]] = None,
+    resume_attached: bool = False,
 ) -> GraphState:
     """
     Create the initial state for a new graph execution.
@@ -185,20 +193,23 @@ def create_initial_state(
         technologies: Optional list of technologies to analyze.
         query_id: Optional database query ID for tracking.
         conversation_history: Optional previous turns for follow-up context.
+        resume_attached: True if a validated resume came with this message.
 
     Returns:
         A GraphState dict with all required fields initialized.
     """
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     return GraphState(
         user_query=user_query,
         conversation_history=conversation_history or [],
         country_filter=country_filter,
         countries=[],
+        unsupported_countries=[],
         role=role,
         role_is_default=False,
         resume_path=resume_path,
+        resume_attached=resume_attached,
         technologies_to_analyze=technologies or [],
         query_intent=None,
         intent_confidence=None,
@@ -221,5 +232,5 @@ def create_initial_state(
         errors=[],
         should_stop=False,
         query_id=query_id,
-        execution_start_time=datetime.utcnow().isoformat(),
+        execution_start_time=datetime.now(timezone.utc).isoformat(),
     )

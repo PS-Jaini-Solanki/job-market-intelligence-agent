@@ -30,6 +30,9 @@ from tools.tech_popularity_tool import build_tech_trends
 
 logger = logging.getLogger(__name__)
 
+# How many of the postings' top skills to rank when the user names no technology.
+TOP_SKILLS_WHEN_UNNAMED = 8
+
 
 def _coerce_github_stats(raw: dict) -> GitHubStats | None:
     """
@@ -60,13 +63,19 @@ async def run_trend_analysis(state: GraphState) -> dict:
     Returns:
         Partial state update with trend_data.
     """
-    technologies = state.get("technologies_to_analyze", [])
+    technologies = state.get("technologies_to_analyze") or []
+    skill_stats_raw = state.get("skill_statistics") or []
+
+    # "What's trending for data engineers?" names no technology: rank the
+    # skills the collected postings actually ask for, not a fixed list.
+    if not technologies:
+        technologies = [s["skill_name"] for s in skill_stats_raw[:TOP_SKILLS_WHEN_UNNAMED]]
 
     if not technologies:
         logger.info("No technologies to analyze — skipping trend analysis")
         return {
             "completed_agents": state.get("completed_agents", []) + ["trend_analysis"],
-            "messages": [AIMessage(content="📊 Trend analysis skipped — no technologies specified.")],
+            "messages": [AIMessage(content="📊 Trend analysis skipped — no technologies named and no skills found in postings.")],
         }
 
     logger.info(
@@ -135,7 +144,6 @@ async def run_trend_analysis(state: GraphState) -> dict:
                 github_data[tech] = {"error": result.error or "failed"}
 
     # Step 2: Get job market counts from skill statistics
-    skill_stats_raw = state.get("skill_statistics") or []
     job_skill_counts: dict[str, int] = {
         stat["skill_name"]: stat["occurrence_count"]
         for stat in skill_stats_raw
@@ -150,7 +158,7 @@ async def run_trend_analysis(state: GraphState) -> dict:
         github_data=github_data,
         job_skill_stats=job_skill_counts,
         total_postings=total_postings,
-        sources=["github", "adzuna", "arbeitnow"],
+        sources=["github", *((state.get("job_search_results") or {}).get("sources_queried") or [])],
     )
 
     top_5 = snapshot.get_ranked(top_n=5)

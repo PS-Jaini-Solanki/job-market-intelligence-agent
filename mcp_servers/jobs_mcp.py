@@ -64,7 +64,7 @@ class JobsMCPServer(MCPServer):
                         },
                         "country": {
                             "type": "string",
-                            "description": "ISO country code (e.g., 'IN', 'US', 'GB'). Default: 'US'",
+                            "description": "ISO country code (e.g., 'IN', 'US', 'GB'). Omit for no country filter",
                         },
                         "max_results": {
                             "type": "integer",
@@ -95,6 +95,13 @@ class JobsMCPServer(MCPServer):
                         "max_results": {
                             "type": "integer",
                             "description": "Postings per country (default: 50)",
+                        },
+                        "job_search_result": {
+                            "type": "object",
+                            "description": (
+                                "Optional postings already collected for this role. "
+                                "When given, no new API calls are made."
+                            ),
                         },
                     },
                     "required": ["role", "country_codes"],
@@ -137,7 +144,7 @@ class JobsMCPServer(MCPServer):
     async def _search_jobs(
         self,
         role: str,
-        country: str = "US",
+        country: Optional[str] = None,
         max_results: int = 100,
     ) -> dict:
         """
@@ -145,106 +152,59 @@ class JobsMCPServer(MCPServer):
 
         Args:
             role: Job title to search for.
-            country: ISO country code.
-            max_results: Total postings budget (split across sources).
+            country: ISO country code, or None for no country filter.
+            max_results: Total postings budget.
 
         Returns:
             Serialized JobSearchResult dictionary.
         """
         # Imported here to avoid a heavy import chain at module load
-        from tools.job_search_tool import _search_adzuna, _search_arbeitnow
-        from models.job import JobSearchResult
+        from tools.job_search_tool import collect_postings
 
-        per_source = max(1, max_results // 2)
-
-        adzuna_jobs = await _search_adzuna(
-            role=role,
-            country_code=country,
-            max_results=per_source,
-        )
-        arbeitnow_jobs = await _search_arbeitnow(
-            role=role,
-            max_results=per_source,
-        )
-
-        all_postings = adzuna_jobs + arbeitnow_jobs
-        sources = []
-        if adzuna_jobs:
-            sources.append("adzuna")
-        if arbeitnow_jobs:
-            sources.append("arbeitnow")
-
-        result = JobSearchResult(
-            query=role,
-            postings=all_postings,
-            total_found=len(all_postings),
-            sources_queried=sources,
-            search_params={"role": role, "country": country},
-        )
-
-        logger.info(
-            "Jobs MCP search complete",
-            extra={"role": role, "country": country, "count": len(all_postings), "sources": sources},
-        )
-        return result.model_dump()
+        return (await collect_postings(role, country, max_results)).model_dump()
 
     async def _compare_countries(
         self,
         role: str,
         country_codes: list[str],
         max_results: int = 50,
+        job_search_result: Optional[dict] = None,
     ) -> dict:
         """
         Compare job markets across multiple countries.
 
-        Collects postings per country and delegates to the
-        country_comparison_tool for analysis.
+        Reuses postings the caller already collected when given; otherwise
+        collects them per country. Analysis is delegated to the
+        country_comparison_tool.
 
         Args:
             role: Job role to compare.
             country_codes: List of ISO country codes.
-            max_results: Postings budget per country.
+            max_results: Postings budget per country (only when collecting).
+            job_search_result: Optional serialized JobSearchResult to reuse.
 
         Returns:
             Comparison dictionary.
         """
-        from tools.job_search_tool import _search_adzuna, _search_arbeitnow
         from models.job import JobSearchResult
         from tools.country_comparison_tool import compare_countries
+        from tools.job_search_tool import collect_postings
 
-        all_postings = []
-        for code in country_codes:
-            jobs = await _search_adzuna(
-                role=role,
-                country_code=code,
-                max_results=max_results,
-            )
-            all_postings.extend(jobs)
+        if job_search_result is None:
+            postings = []
+            sources: list[str] = []
+            for code in country_codes:
+                partial = await collect_postings(role, code, max_results)
+                postings.extend(partial.postings)
+                sources.extend(s for s in partial.sources_queried if s not in sources)
+            job_search_result = JobSearchResult(
+                query=role,
+                postings=postings,
+                total_found=len(postings),
+                sources_queried=sources,
+                search_params={"role": role},
+            ).model_dump()
 
-        # Arbeitnow has no country parameter — it returns a single pool of
-        # postings with the country inferred from each posting's location.
-        # Previously this method only queried Adzuna, so comparisons
-        # silently under-counted the market (especially for European
-        # countries, where Arbeitnow has strong coverage) relative to the
-        # regular single-country search_jobs path, which does query both.
-        arbeitnow_jobs = await _search_arbeitnow(role=role, max_results=max_results)
-        wanted_codes = {c.upper() for c in country_codes}
-        arbeitnow_matches = [j for j in arbeitnow_jobs if j.country in wanted_codes]
-        all_postings.extend(arbeitnow_matches)
-
-        sources_queried = ["adzuna"] + (["arbeitnow"] if arbeitnow_matches else [])
-        job_result = JobSearchResult(
-            query=role,
-            postings=all_postings,
-            total_found=len(all_postings),
-            sources_queried=sources_queried,
-            search_params={"role": role},
+        return await compare_countries.ainvoke(
+            {"job_search_result": job_search_result, "country_codes": country_codes}
         )
-
-        comparison = await compare_countries.ainvoke(
-            {
-                "job_search_result": job_result.model_dump(),
-                "country_codes": country_codes,
-            }
-        )
-        return comparison

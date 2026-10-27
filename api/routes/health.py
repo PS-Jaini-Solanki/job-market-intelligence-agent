@@ -41,6 +41,7 @@ class ReadyResponse(BaseModel):
     status: str
     database: str
     llm_configured: bool
+    llm_model: str
     apis_configured: dict[str, bool]
 
 
@@ -88,10 +89,32 @@ async def readiness_check() -> ReadyResponse:
         db_status = f"error: {str(e)[:50]}"
         logger.warning("Database health check failed", extra={"error": str(e)})
 
+    # Check the configured model actually exists for this key: a key alone
+    # says nothing once a provider retires a model (every LLM call then
+    # fails and the agents silently run on their fallbacks).
+    llm_status = "not configured"
+    if settings.GROQ_API_KEY:
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=10) as client:
+                response = await client.get(
+                    f"https://api.groq.com/openai/v1/models/{settings.GROQ_MODEL}",
+                    headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}"},
+                )
+            llm_status = (
+                f"{settings.GROQ_MODEL}: available" if response.status_code == 200
+                else f"{settings.GROQ_MODEL}: unavailable (HTTP {response.status_code})"
+            )
+        except Exception as e:
+            llm_status = f"{settings.GROQ_MODEL}: error: {str(e)[:50]}"
+            logger.warning("LLM health check failed", extra={"error": str(e)})
+
+    healthy = db_status == "connected" and llm_status.endswith("available")
     return ReadyResponse(
-        status="ready" if db_status == "connected" else "degraded",
+        status="ready" if healthy else "degraded",
         database=db_status,
         llm_configured=bool(settings.GROQ_API_KEY),
+        llm_model=llm_status,
         apis_configured={
             "github": settings.has_github,
             "tavily": settings.has_tavily,

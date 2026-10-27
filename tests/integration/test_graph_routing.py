@@ -86,3 +86,35 @@ def test_graph_wires_recommendation_through_final_answer():
     assert ("recommendation", "final_answer") in edges
     assert ("final_answer", "report_generation") in edges
     assert ("report_generation", "__end__") in edges
+
+
+def test_stale_resume_does_not_run_on_salary_question_without_trends():
+    # Regression: the skill_extraction -> resume_analysis edge used to bypass
+    # the intent gate whenever no trend analysis ran.
+    from agents.graph import should_analyze_trends
+    state = _state_with_plan([{"task_type": "collect_jobs"}])
+    state["resume_path"] = "uploads/resumes/test.txt"
+    state["query_intent"] = "salary"
+    assert should_analyze_trends(state) == "recommendation"
+
+
+def test_trend_intent_runs_trend_analysis_even_without_named_technologies():
+    from agents.graph import should_analyze_trends
+    state = _state_with_plan([{"task_type": "collect_jobs"}])
+    state["query_intent"] = "tech_trend"
+    assert should_analyze_trends(state) == "trend_analysis"
+
+
+def test_comparison_intent_runs_comparison_even_if_llm_plan_omits_it():
+    state = _state_with_plan([{"task_type": "collect_jobs"}])
+    state["query_intent"] = "country_comparison"
+    assert should_analyze_resume(state) == "comparison_agent"
+
+
+def test_unsupported_country_only_goes_to_chat_responder():
+    from agents.graph import route_after_classifier
+    state = create_initial_state(user_query="jobs in Japan")
+    state.update(query_intent="job_market", unsupported_countries=["Japan"], countries=[])
+    assert route_after_classifier(state) == "chat_responder"
+    state["countries"] = ["IN"]  # "India vs Japan": still answer for India
+    assert route_after_classifier(state) == "planner"

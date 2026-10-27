@@ -27,7 +27,7 @@ from typing import Optional
 
 from langchain_core.messages import AIMessage
 
-from agents.classifier import QueryIntent
+from agents.classifier import _GREETING_RE, QueryIntent, is_analytical
 from agents.state import GraphState
 from models.agent import MCPCallRecord
 from prompts.chat_prompt import (
@@ -81,9 +81,10 @@ def _quick_template(intent: Optional[str], query: str) -> Optional[str]:
     """
     q = query.strip().lower()
     if intent == QueryIntent.GENERAL_CHAT.value:
-        greeting_markers = ("hi", "hello", "hey", "good morning", "good afternoon",
-                            "good evening", "hii", "yo", "namaste")
-        if q.startswith(greeting_markers) and len(q) < 30:
+        # Whole-word greeting with at most a couple of words after it
+        # ("hi there"), so "history of Python" is not a greeting.
+        greeting = _GREETING_RE.match(q)
+        if greeting and len(q[greeting.end():].split()) <= 2:
             return GREETING_MESSAGE
 
         if q in ("thanks", "thank you", "thankyou", "thx", "ty"):
@@ -136,6 +137,22 @@ async def run_chat_responder(state: GraphState) -> dict:
     mcp_calls = state.get("mcp_calls", []) or []
 
     logger.info("ChatResponder starting", extra={"intent": intent, "query": query})
+
+    # --- 0. Analytical question about a market we can't cover ---------
+    # Answering it with another country's postings would be wrong data.
+    unsupported = state.get("unsupported_countries") or []
+    if is_analytical(intent) and unsupported and not state.get("countries"):
+        from tools.job_search_tool import COUNTRY_NAMES
+        answer = (
+            f"I don't have live job data for **{', '.join(unsupported)}**, so I can't answer "
+            "that with real postings (and I won't guess). I can analyze these markets: "
+            f"{', '.join(COUNTRY_NAMES.values())}. Want me to look at one of those instead?"
+        )
+        return {
+            "direct_answer": answer,
+            "completed_agents": state.get("completed_agents", []) + ["chat_responder"],
+            "messages": [AIMessage(content=answer)],
+        }
 
     # --- 1. Fast template responses (no LLM, no MCP) ------------------
     template = _quick_template(intent, query)
@@ -209,9 +226,13 @@ async def run_chat_responder(state: GraphState) -> dict:
             f"salaries, tech trends and resume fit. Want to try one of those?"
         )
 
+    # Some models emit inline citation markers like 【source】; the sources
+    # are already in the search grounding, so drop the markers.
+    answer = re.sub(r"【[^】]*】", "", answer).strip()
+
     return {
-        "direct_answer": answer.strip(),
+        "direct_answer": answer,
         "mcp_calls": mcp_calls,
         "completed_agents": state.get("completed_agents", []) + ["chat_responder"],
-        "messages": [AIMessage(content=answer.strip())],
+        "messages": [AIMessage(content=answer)],
     }
